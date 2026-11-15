@@ -1,0 +1,255 @@
+{
+  "engineVersion": "5.5.4",
+  "packages": [
+    {
+      "archive": "bzip2-1.0.8-h0ad9c76_10.conda",
+      "sha256": "04767466ee9227c9c57ab2c6503e0149177d34111c7418d2f420297acb1eb229",
+      "files": [
+        {
+          "member": "Library/bin/libbz2.dll",
+          "sha256": "7f3ddbb88b670d79ada028480067ccdf240601319128e40eec8dce1daf4a9238"
+        }
+      ]
+    },
+    {
+      "archive": "giflib-6.1.3-h918f4b6_2.conda",
+      "sha256": "a1568e6b67ba46c96be71e071b527450ea3b229e60f636133d3cba8018f1ac03",
+      "files": [
+        {
+          "member": "Library/bin/gif-7.dll",
+          "sha256": "7c52dccd314fed907cdbb7b0e7f8ab611c5feb973b1bc8f706ef682dd0810908"
+        }
+      ]
+    },
+    {
+      "archive": "icu-78.3-h5112557_2.conda",
+      "sha256": "75c549b55b673e15de8785a8e5dd85bca7eb612eee0ff4dc8d7bdaa15eacbdbb",
+      "files": [
+        {
+          "member": "Library/bin/icudt78.dll",
+          "sha256": "18dd8e1881c5d378de868f8f2c2309d95d3f6757ef40868b76657e7a1f061a51"
+        },
+        {
+          "member": "Library/bin/icuuc78.dll",
+          "sha256": "af525f3cb120014ded7c1b5c346ea00a5a488dee5d17b18e0172b6421e730737"
+        }
+      ]
+    },
+    {
+      "archive": "leptonica-1.87.0-h5b5c448_2.conda",
+      "sha256": "fed6e72a8414f9af148e32685b3cc4be5a371fe99c8f180e0bbd30e454e2bc89",
+      "files": [
+        {
+          "member": "Library/bin/leptonica-1.87.0.dll",
+          "sha256": "5f2507b62250a2dcde38fb9536c8b4be03eaa713ed5257383b0a279a41e77d06"
+        }
+      ]
+    },
+    {
+      "archive": "lerc-4.3.0-hd936e49_0.conda",
+      "sha256": "e96230bcb2e65df55c14c52ef2cbd5b688482fbb8760de59688879edcdfa3679",
+      "files": [
+        {
+          "member": "Library/bin/Lerc.dll",
+          "sha256": "76d43b04971621d196451044536a25d8f449558f47b111979bca72e9ad48a0df"
+        }
+      ]
+    },
+    {
+      "archive": "libarchive-3.8.11-lgpl_h933c176_1.conda",
+      "sha256": "5c3e469d94b562235f80536e9f18642d0473cb77742d27369be2049c067df62b",
+      "files": [
+        {
+          "member": "Library/bin/archive.dll",
+          "sha256": "3901f31528cf0d15b1a65104bfb5afbb8fca473260eca03e8186e0a15baa483a"
+        }
+      ]
+    },
+    {
+      "archive": "libcurl-8.23.0-hdb0ef4a_0.conda",
+      "sha256": "d3088e1fd049fe0c1905ba6174e77279ddb4817739a204aaf4bd31d59d38ea6a",
+      "files": [
+        {
+          "member": "Library/bin/libcurl.dll",
+          "sha256": "de5bbb95bfb356bb2f8e94582f09f2ff348f2234e48954ff1485e0eda6b145cb"
+        }
+      ]
+    },
+    {
+      "archive": "libdeflate-1.26-h1a1d4e4_0.conda",
+      "sha256": "f51f28e894579387a531c53d97e058642ecfb232c4cb156c43c9121a9044f3d8",
+      "files": [
+        {
+          "member": "Library/bin/deflate.dll",
+          "sha256": "6e3ddf8a9c567e31580aa381f058987c70848d2aead885e6d93edcf577aa68d4"
+        }
+      ]
+    },
+    {
+      "archive": "libiconv-1.18-hc1393d2_3.conda",
+      "sha256": "35e04e3ddac7720fc7c550a1c9f998604299d6a7bd1f3ec9b2825d825061daa2",
+      "files": [
+        {
+          "member": "Library/bin/charset.dll",
+          "sha256": "4983c202d0424ad6e271741fb9453b7a833bb1697854bc37046db39618234f14"
+        },
+        {
+          "member": "Library/bin/iconv.dll",
+          "sha256": "4fe67a10b7455892ac546d79bc0b2ab2e3483135495255ea2c31d2c794c28e38"
+        }
+      ]
+    },
+    {
+      "archive": "libjpeg-turbo-3.2.1-hfd05255_0.conda",
+      "sha256": "195be7b2ff1eeff02b31cf366437a38d84560c2f6c4facd56b2969024f50957f",
+      "files": [
+        {
+          "member": "Library/bin/jpeg8.dll",
+          "sha256": "0a5c1178b599856420b9afe3d9eb53e43ba83031123f3b72700d925023a752d5"
+        }
+      ]
+    },
+    {
+      "archive": "liblzma-5.8.3-hfd05255_1.conda",
+      "sha256": "d36c4a1e1f80fd08e18a407e03622ff2f34dfdd022da6488ad19603dea19e6d5",
+      "files": [
+        {
+          "member": "Library/bin/liblzma.dll",
+          "sha256": "8439ed3564a8dbbf6355e29c92e88fdf1f6dee096504149fc051104155c868a9"
+        }
+      ]
+    },
+    {
+      "archive": "libpng-1.6.59-hdc8cecf_0.conda",
+      "sha256": "36050852deae6edc98d7b71489b8d07254e2753c69bd524bf5784927cd1f0b2c",
+      "files": [
+        {
+          "member": "Library/bin/libpng16.dll",
+          "sha256": "d4547a7b9f58e4525be0e8b16cb688e16f314ad8e199456c7217dc8835ad4152"
+        }
+      ]
+    },
+    {
+      "archive": "libpsl-0.23.1-h9b16d47_1.conda",
+      "sha256": "e53fe3b09f82b59b644264133d6d148ac31bb5451b7583cff55690bf038f2f62",
+      "files": [
+        {
+          "member": "Library/bin/psl-5.dll",
+          "sha256": "24a1963f1684f342fbd2740c498cddd8f4dbf12846414d2b95637a1a24f86ba1"
+        }
+      ]
+    },
+    {
+      "archive": "libssh2-1.11.1-h734d217_1.conda",
+      "sha256": "1097b08429b4f53f5751a32c6d99a083d227ca7f7812c0b239eea124cec073a0",
+      "files": [
+        {
+          "member": "Library/bin/libssh2.dll",
+          "sha256": "69c35872dae1ed72e67388a4c64d51004dd15fc1be0901b2025da721d1496bb4"
+        }
+      ]
+    },
+    {
+      "archive": "libtiff-4.7.2-hef6d50c_2.conda",
+      "sha256": "61a557e19917a459f871471ca523b93973372ebf01a97e5802b56d069a2789b8",
+      "files": [
+        {
+          "member": "Library/bin/tiff.dll",
+          "sha256": "5bbc407ccdeacf98e6126051c5a5f181991eb228a1d9486bd4999b49ed9d91a6"
+        }
+      ]
+    },
+    {
+      "archive": "libwebp-base-1.6.0-h4d5522a_1.conda",
+      "sha256": "4470d98d3178b0d45492eed4808afe421d2e7808352b8d06c2dc29166b75d94d",
+      "files": [
+        {
+          "member": "Library/bin/libsharpyuv.dll",
+          "sha256": "09e089c9ad5da983f04e98ccc8f41de1750b0a351370a4d42b9080c3e68eac50"
+        },
+        {
+          "member": "Library/bin/libwebp.dll",
+          "sha256": "9e13857e99f7fa275aa7870393322d3d54dc55d0a9293098f60f199ae070d235"
+        },
+        {
+          "member": "Library/bin/libwebpmux.dll",
+          "sha256": "dfa99a3245a78c0ea006907a52705aa07413200c38a190a6ad6e3839455705f3"
+        }
+      ]
+    },
+    {
+      "archive": "libxml2-16-2.15.4-h3cfd58e_1.conda",
+      "sha256": "819c4edd7b7bcfa9461aeccb56c0a7e9fa7c251163333e64222c142499822958",
+      "files": [
+        {
+          "member": "Library/bin/libxml2.dll",
+          "sha256": "5955b2406eb7c3510a74dd794550a740b0d61e89f7159c102b59d3d58fa10ed5"
+        }
+      ]
+    },
+    {
+      "archive": "libzlib-1.3.2-hfd05255_3.conda",
+      "sha256": "0629c2cc0404d3bb29d6baa7b4ba62da80797015e86de050db81ea5a07050527",
+      "files": [
+        {
+          "member": "Library/bin/zlib.dll",
+          "sha256": "f4f26ea6300c8449daad4650915e01ac80aafc6ca8b73a50be450f1fb66cdd63"
+        }
+      ]
+    },
+    {
+      "archive": "lz4-c-1.11.1-h6a83c73_0.conda",
+      "sha256": "2a24b345cf469865d5d84d6daf4cc7b02cf135af1f88041c3933ac58ca523139",
+      "files": [
+        {
+          "member": "Library/bin/lz4.dll",
+          "sha256": "fa9b72d31492ee37c803a04100c7940895f3a39c5540492c003827349731b2cc"
+        }
+      ]
+    },
+    {
+      "archive": "openjpeg-2.5.4-h90fa87c_2.conda",
+      "sha256": "d1c630ccd9ae0898b48d84e986f4c330f66a25e535f99efe8cbf03f042b33da5",
+      "files": [
+        {
+          "member": "Library/bin/openjp2.dll",
+          "sha256": "5d11a0abfa2b679c22f0d91df66bd2abc83acb6988b050ad9e75ea0b0025e2b0"
+        }
+      ]
+    },
+    {
+      "archive": "openssl-3.6.5-hf411b9b_0.conda",
+      "sha256": "bc44625e0c6d83f3e02b5f6adc01e0e3ca7001d3d94e24959591a57f5a011b9a",
+      "files": [
+        {
+          "member": "Library/bin/libcrypto-3-x64.dll",
+          "sha256": "7ff26fb03c914b87e22f55c6abed6eda0bfbfc628f9c1f1fde67993ddf1f8d47"
+        }
+      ]
+    },
+    {
+      "archive": "tesseract-5.5.4-h8c7c6a5_0.conda",
+      "sha256": "67af4d943866603827aa4029ec0f2442644b3abe58c2313e89cfcc8be9e06897",
+      "files": [
+        {
+          "member": "Library/bin/tesseract.exe",
+          "sha256": "d850aa7062d036bdaeae45fee8301e7d8ba8083e510948c62d4db5dfb321754f"
+        },
+        {
+          "member": "Library/bin/tesseract55.dll",
+          "sha256": "3ff4d84417ac51d5f2ce6adf2b6b42cc38f5bf2aadcca78a6121b504b214752b"
+        }
+      ]
+    },
+    {
+      "archive": "zstd-1.5.7-h534d264_7.conda",
+      "sha256": "ca7daae4f218a11fab82cc2857f0ea518ec3f46acec60490485347a4c22c6b3e",
+      "files": [
+        {
+          "member": "Library/bin/zstd.dll",
+          "sha256": "fcc1dc71b7df5489e37a78abab9c31d763570d55e93c67f388058c41c0d7b8df"
+        }
+      ]
+    }
+  ]
+}

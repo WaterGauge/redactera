@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "types": ["node", "mocha", "@wdio/globals/types", "wdio-electron-service"]
+  },
+  "include": ["e2e/**/*.ts", "wdio.conf.ts", "src/preload.ts"],
+  "exclude": ["node_modules"]
+}

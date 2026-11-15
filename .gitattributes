@@ -1,0 +1,4 @@
+/scripts/generate-icons.py text eol=lf
+/assets/icon-manifest.json text eol=lf
+/scripts/windows-installer/squirrel-full-only.patch text eol=lf
+/scripts/windows-installer/squirrel-launcher.patch text eol=lf -whitespace

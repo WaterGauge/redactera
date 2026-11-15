@@ -1,0 +1,98 @@
+--- a/src/Setup/Setup.vcxproj
++++ b/src/Setup/Setup.vcxproj
+@@ -14,15 +14,15 @@
+     <ProjectGuid>{C1D40624-A484-438A-B846-052F321C89D1}</ProjectGuid>
+     <ConfigurationType>Application</ConfigurationType>
+     <Keyword>Win32Proj</Keyword>
+-    <PlatformToolset>v141</PlatformToolset>
++    <PlatformToolset>v142</PlatformToolset>
+     <CharacterSet>Unicode</CharacterSet>
+     <RootNamespace>Setup</RootNamespace>
+-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
++    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+   </PropertyGroup>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+     <UseDebugLibraries>true</UseDebugLibraries>
+-    <UseOfMfc>Static</UseOfMfc>
++    <UseOfMfc>false</UseOfMfc>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+     <UseDebugLibraries>false</UseDebugLibraries>
+@@ -64,8 +64,8 @@
+     <Link>
+       <SubSystem>Windows</SubSystem>
+       <GenerateDebugInformation>true</GenerateDebugInformation>
+-      <AdditionalDependencies>kernel32.lib;user32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;urlmon.lib</AdditionalDependencies>
+-      <DelayLoadDLLs>user32.dll;advapi32.dll;shell32.dll;ole32.dll;oleaut32.dll;urlmon.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
++      <AdditionalDependencies>urlmon.lib</AdditionalDependencies>
++      <DelayLoadDLLs>comctl32.dll;shell32.dll;shlwapi.dll;urlmon.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+     </Link>
+     <Manifest>
+       <AdditionalManifestFiles>compat.manifest</AdditionalManifestFiles>
+@@ -91,8 +91,9 @@
+       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+       <OptimizeReferences>true</OptimizeReferences>
+       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
+-      <AdditionalDependencies>kernel32.lib;user32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;urlmon.lib</AdditionalDependencies>
+-      <DelayLoadDLLs>user32.dll;advapi32.dll;shell32.dll;ole32.dll;oleaut32.dll;urlmon.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
++      <AdditionalOptions>/PDBALTPATH:Setup.pdb %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalDependencies>urlmon.lib</AdditionalDependencies>
++      <DelayLoadDLLs>comctl32.dll;shell32.dll;shlwapi.dll;urlmon.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+     </Link>
+     <Manifest>
+       <AdditionalManifestFiles>compat.manifest</AdditionalManifestFiles>
+--- a/src/Setup/winmain.cpp
++++ b/src/Setup/winmain.cpp
+@@ -15,7 +15,7 @@
+ 
+ // Some libraries are still loaded from the current directories.
+ // If we pre-load them with an absolute path then we are good.
+-void PreloadLibs()
++static void PreloadLibs()
+ {
+ 	wchar_t sys32Folder[MAX_PATH];
+ 	GetSystemDirectory(sys32Folder, MAX_PATH);
+@@ -23,22 +23,26 @@
+ 	std::wstring version = (std::wstring(sys32Folder) + L"\\version.dll");
+ 	std::wstring logoncli = (std::wstring(sys32Folder) + L"\\logoncli.dll");
+ 	std::wstring sspicli = (std::wstring(sys32Folder) + L"\\sspicli.dll");
++	std::wstring urlmon = (std::wstring(sys32Folder) + L"\\urlmon.dll");
+ 
+ 	LoadLibrary(version.c_str());
+ 	LoadLibrary(logoncli.c_str());
+ 	LoadLibrary(sspicli.c_str());
++	LoadLibrary(urlmon.c_str());
+ }
+ 
+-void MitigateDllHijacking()
++static void MitigateDllHijacking()
+ {
+ 	// Set the default DLL lookup directory to System32 for ourselves and kernel32.dll
+-	SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
+-
+ 	HMODULE hKernel32 = LoadLibrary(L"kernel32.dll");
+-	ATLASSERT(hKernel32 != NULL);
+-
+-	SetDefaultDllDirectoriesFunction pfn = (SetDefaultDllDirectoriesFunction)GetProcAddress(hKernel32, "SetDefaultDllDirectories");
+-	if (pfn) { (*pfn)(LOAD_LIBRARY_SEARCH_SYSTEM32); }
++	if (hKernel32)
++	{
++		SetDefaultDllDirectoriesFunction pfn = (SetDefaultDllDirectoriesFunction)GetProcAddress(hKernel32, "SetDefaultDllDirectories");
++		if (pfn)
++		{
++			(*pfn)(LOAD_LIBRARY_SEARCH_SYSTEM32);
++		}
++	}
+ 
+ 	PreloadLibs();
+ }
+@@ -48,7 +52,7 @@
+                       _In_ LPWSTR lpCmdLine,
+                       _In_ int nCmdShow)
+ {
+-	MitigateDllHijacking();	
++	MitigateDllHijacking();
+ 
+ 	int exitCode = -1;
+ 	CString cmdLine(lpCmdLine);

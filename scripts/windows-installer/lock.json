@@ -1,0 +1,95 @@
+{
+  "electronWinstallerVersion": "5.4.4",
+  "launcher": {
+    "upstreamCommit": "a1eb63ac1cfb04bc2ce6ed91b4aaff44b672df6d",
+    "platformToolset": "v143",
+    "vcToolsVersionPrefix": "14.44",
+    "windowsSdkVersion": "10.0.26100.0",
+    "patchedSourceSha256": {
+      "src/Setup/Setup.vcxproj": "c9a4782b86e51dc663e1d9689b2cb02cd6d280a8688140a75ac64573b727c3e8",
+      "src/Setup/winmain.cpp": "b29e40338f47310c55edf8b9529db213266e14da34355a93ffd5fc091d6736b2"
+    }
+  },
+  "sdk": {
+    "file": "dotnet-sdk-10.0.404-win-x64.zip",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.404/dotnet-sdk-10.0.404-win-x64.zip",
+    "sha512": "330ddd2665b43cd2e428216a0d8ea1ac7bb19b5434fdc530e62010dc3b52823a620bf95489d628e1ed6f5122401793ee4887cca4a019122361a1231497f632ee",
+    "version": "10.0.404"
+  },
+  "sources": {
+    "squirrel": {
+      "file": "Squirrel.Windows-eef37460ae.tar.gz",
+      "url": "https://codeload.github.com/Squirrel/Squirrel.Windows/tar.gz/eef37460ae",
+      "sha256": "f301ff2d0043005d888517d0236a1056ffd103be54a39218602fc0f50e331afd"
+    },
+    "nuget": {
+      "file": "NuGet-50f8d9e438fe948d7109501bd10f6024d0585b70.tar.gz",
+      "url": "https://codeload.github.com/paulcbetts/NuGet/tar.gz/50f8d9e438fe948d7109501bd10f6024d0585b70",
+      "sha256": "35d168c9fc19b5a47a946132e76953007f6f3c6ae229a1eb80cfcdbe3678809e"
+    }
+  },
+  "packages": [
+    {
+      "id": "ILRepack",
+      "version": "1.26.0",
+      "file": "ilrepack.1.26.0.nupkg",
+      "sha256": "fe49fd5aa140c1f4e99b24fbe34311289a4ee97ab0989df2b9f4f5288fa95471",
+      "url": "https://api.nuget.org/v3-flatcontainer/ilrepack/1.26.0/ilrepack.1.26.0.nupkg"
+    },
+    {
+      "id": "Microsoft.Data.Edm",
+      "version": "5.6.1",
+      "file": "microsoft.data.edm.5.6.1.nupkg",
+      "sha256": "2372dda0dbbc7c01a09883fbeb4ba245ac0913bce346795fd66f11db96945510",
+      "url": "https://www.nuget.org/api/v2/package/Microsoft.Data.Edm/5.6.1"
+    },
+    {
+      "id": "Microsoft.Data.OData",
+      "version": "5.6.1",
+      "file": "microsoft.data.odata.5.6.1.nupkg",
+      "sha256": "82454bc4c599f79682130e30cd44cb6588dcd75661c3cbd637c9ae321ba84a8c",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.data.odata/5.6.1/microsoft.data.odata.5.6.1.nupkg"
+    },
+    {
+      "id": "microsoft.data.services.client",
+      "version": "5.6.1",
+      "file": "microsoft.data.services.client.5.6.1.nupkg",
+      "sha256": "a6405fb929a99739c3079024a4d1003dc1a4629ff6f40b95c454498d8e545ed8",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.data.services.client/5.6.1/microsoft.data.services.client.5.6.1.nupkg?redactera=20261112"
+    },
+    {
+      "id": "Microsoft.NETFramework.ReferenceAssemblies.net45",
+      "version": "1.0.3",
+      "file": "microsoft.netframework.referenceassemblies.net45.1.0.3.nupkg",
+      "sha256": "23a9f94ea3e2cb88cd8341af75b811c6fb5cb82516fc696e95ed4620279128e3",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.netframework.referenceassemblies.net45/1.0.3/microsoft.netframework.referenceassemblies.net45.1.0.3.nupkg"
+    },
+    {
+      "id": "Mono.Cecil",
+      "version": "0.11.2",
+      "file": "mono.cecil.0.11.2.nupkg",
+      "sha256": "aaf423679157209fb2bb8179117bf1ccf5124fde2f98065089d71aa5a46f9184",
+      "url": "https://api.nuget.org/v3-flatcontainer/mono.cecil/0.11.2/mono.cecil.0.11.2.nupkg"
+    },
+    {
+      "id": "System.Spatial",
+      "version": "5.6.1",
+      "file": "system.spatial.5.6.1.nupkg",
+      "sha256": "0d6efec3c6097edaa50d02cc713a0bc80d3a1441992081d21104831a7e4f4d06",
+      "url": "https://www.nuget.org/api/v2/package/System.Spatial/5.6.1"
+    },
+    {
+      "id": "WpfAnimatedGif",
+      "version": "1.4.15",
+      "file": "wpfanimatedgif.1.4.15.nupkg",
+      "sha256": "328bc20415c1213b2232020ac6af6c7c3037e5cf80e909b96d4798ef376afb0a",
+      "url": "https://api.nuget.org/v3-flatcontainer/wpfanimatedgif/1.4.15/wpfanimatedgif.1.4.15.nupkg"
+    }
+  ],
+  "vendorTools": {
+    "StubExecutable.exe": "d823e6d954f7e445fbbb5c04e40a39cf248a3621f9eccbafdf3f0f1e7acb11dd",
+    "WriteZipToSetup.exe": "9278fe28ac434fde0be3a10788dc13ad92a28940ed70a52f86d9d69435599349",
+    "nuget.exe": "61704f7dbe233980992f2a00ef9baacf64a8b157d688a4a4be6b7a2eaea02828",
+    "rcedit.exe": "e2df7b664db830f159d0dc6b3da8a95442cca175b9577f2d19952646d37ac32f"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {},
+    "noEmit": true
+  },
+  "include": [
+    "forge.config.ts",
+    "webpack.*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".project-state"
+  ]
+}

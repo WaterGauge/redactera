@@ -1,0 +1,40 @@
+{
+  "pymupdfVersion": "1.28.2",
+  "mupdfVersion": "1.28.2",
+  "pythonRuntime": {
+    "python": "3.11.18",
+    "openssl": "3.5.9",
+    "distributions": {
+      "darwin-arm64": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.11.18%2B20261110-aarch64-apple-darwin-install_only.tar.gz",
+        "sha256": "73f1ed14486aa278d331e95f7d6d452f5cfb69d90b418e26e62fd4846d53557d"
+      },
+      "win32-x64": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.11.18%2B20261110-x86_64-pc-windows-msvc-install_only.tar.gz",
+        "sha256": "5ca7e23bbcc8933a75f4ae9c3a5e5d1ffae5fd143aec9a9d77cf5124cc6e0eef"
+      }
+    }
+  },
+  "archives": [
+    {
+      "name": "pymupdf-1.28.2.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/a3/fb/b6761fa2d5266f2cdb24c3b91f4023070ab7848381417678e7a289a1d52a/pymupdf-1.28.2.tar.gz",
+      "sha256": "5e0be7908a715aa20333caddd73f1d6f01e4cd0c26e869fa2dd0b7f344da2249"
+    },
+    {
+      "name": "mupdf-1.28.2-source.tar.gz",
+      "url": "https://github.com/ArtifexSoftware/mupdf-downloads/releases/download/1.28.2/mupdf-1.28.2-source.tar.gz",
+      "sha256": "44075a84e329db55b9bef5f342a70fd26d69e48ad1d33cb89d9664581c641156"
+    },
+    {
+      "name": "Python-3.11.18.tar.xz",
+      "url": "https://www.python.org/ftp/python/3.11.18/Python-3.11.18.tar.xz",
+      "sha256": "9120e0a653868f6e3698d36cdd99e5a58903ec9469e448f21d98f7b16d8fa290"
+    },
+    {
+      "name": "openssl-3.5.9.tar.gz",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+      "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+    }
+  ]
+}

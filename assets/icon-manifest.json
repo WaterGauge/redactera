@@ -1,0 +1,307 @@
+{
+  "schema": 1,
+  "generator": "scripts/generate-icons.py",
+  "pillowVersion": "11.1.0",
+  "alphaPolicy": {
+    "transparentAtMost": 1,
+    "opaqueAtLeast": 250
+  },
+  "coverage": {
+    "macos": 0.82,
+    "windows": 0.9
+  },
+  "inputs": {
+    "redactera-icon-sources/redactera-macos-source.png": "c655ea6924482df496e1f5e1ccfea60c9da029236440d8e0e63c81c90f05ca37",
+    "redactera-icon-sources/redactera-windows-source.png": "c1a57353c56d278a92e7658ab3a0a81a8ffbf0958af3558c64eb2148949a299d",
+    "redactera-icon-sources/redactera-macos-cutout.png": "86818345c14aaea6a5f5893c5639a061867a550868c55cc9076cd36f684fd390",
+    "redactera-icon-sources/redactera-windows-cutout.png": "6e63d0c0329876b58533ac751e6334544302a49931dbce625b009b07bd76d139",
+    "scripts/generate-icons.py": "bd6dfce9747b1e95f31ed0a4b0f47e83a40669d5f301cce364691c15d9180eb1"
+  },
+  "outputs": {
+    "assets/redactera-macos.png": "a40eea69e75f21f9ba01a88de8b9d5d997fc22326dfaa48e184c33ad44c078ba",
+    "assets/redactera-windows.png": "5a4b219893f33ffa05f2735da635f873a881a5232f72d9d68b404b57de42d15c",
+    "assets/icon.ico": "30b4ca3bb7eedd6b657b2f32bf98809d9dd60581c8a2d767a405b7b766da93c9",
+    "assets/icon.icns": "22cb9c55270b75561c04247a2efaba4b7b836642e8ece130b55ff63e1f3c27cb",
+    "assets/installer.gif": "5c164eda349f291a9454eb065bb6153c00cf941f32bf596fffc7f9e6f58dc8f9"
+  },
+  "icoFrames": {
+    "16": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 110,
+      "opaquePixels": 66,
+      "alphaBounds": [
+        2,
+        1,
+        14,
+        14
+      ]
+    },
+    "20": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 150,
+      "opaquePixels": 144,
+      "alphaBounds": [
+        2,
+        1,
+        18,
+        19
+      ]
+    },
+    "24": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 206,
+      "opaquePixels": 207,
+      "alphaBounds": [
+        2,
+        1,
+        21,
+        23
+      ]
+    },
+    "32": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 398,
+      "opaquePixels": 380,
+      "alphaBounds": [
+        3,
+        1,
+        28,
+        30
+      ]
+    },
+    "40": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 639,
+      "opaquePixels": 645,
+      "alphaBounds": [
+        4,
+        2,
+        35,
+        38
+      ]
+    },
+    "48": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 967,
+      "opaquePixels": 959,
+      "alphaBounds": [
+        5,
+        2,
+        42,
+        43
+      ]
+    },
+    "64": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 1713,
+      "opaquePixels": 1823,
+      "alphaBounds": [
+        7,
+        3,
+        57,
+        58
+      ]
+    },
+    "96": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 4072,
+      "opaquePixels": 4220,
+      "alphaBounds": [
+        11,
+        5,
+        85,
+        91
+      ]
+    },
+    "128": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 7303,
+      "opaquePixels": 7686,
+      "alphaBounds": [
+        14,
+        6,
+        113,
+        121
+      ]
+    },
+    "256": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 29702,
+      "opaquePixels": 31771,
+      "alphaBounds": [
+        29,
+        13,
+        227,
+        243
+      ]
+    }
+  },
+  "icnsFrames": {
+    "icp4": {
+      "size": 16,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 91,
+      "opaquePixels": 113,
+      "alphaBounds": [
+        1,
+        1,
+        14,
+        14
+      ]
+    },
+    "ic11": {
+      "size": 32,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 364,
+      "opaquePixels": 503,
+      "alphaBounds": [
+        3,
+        3,
+        29,
+        29
+      ]
+    },
+    "icp5": {
+      "size": 32,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 364,
+      "opaquePixels": 503,
+      "alphaBounds": [
+        3,
+        3,
+        29,
+        29
+      ]
+    },
+    "ic12": {
+      "size": 64,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 1491,
+      "opaquePixels": 2202,
+      "alphaBounds": [
+        6,
+        6,
+        58,
+        58
+      ]
+    },
+    "ic07": {
+      "size": 128,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 5886,
+      "opaquePixels": 9638,
+      "alphaBounds": [
+        11,
+        11,
+        116,
+        116
+      ]
+    },
+    "ic13": {
+      "size": 256,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 23913,
+      "opaquePixels": 39724,
+      "alphaBounds": [
+        23,
+        23,
+        233,
+        233
+      ]
+    },
+    "ic08": {
+      "size": 256,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 23913,
+      "opaquePixels": 39724,
+      "alphaBounds": [
+        23,
+        23,
+        233,
+        233
+      ]
+    },
+    "ic14": {
+      "size": 512,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 96724,
+      "opaquePixels": 160978,
+      "alphaBounds": [
+        46,
+        46,
+        466,
+        466
+      ]
+    },
+    "ic09": {
+      "size": 512,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 96724,
+      "opaquePixels": 160978,
+      "alphaBounds": [
+        46,
+        46,
+        466,
+        466
+      ]
+    },
+    "ic10": {
+      "size": 1024,
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 388844,
+      "opaquePixels": 648399,
+      "alphaBounds": [
+        92,
+        92,
+        932,
+        932
+      ]
+    }
+  },
+  "pngs": {
+    "assets/redactera-macos.png": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 388844,
+      "opaquePixels": 648399,
+      "alphaBounds": [
+        92,
+        92,
+        932,
+        932
+      ]
+    },
+    "assets/redactera-windows.png": {
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "transparentPixels": 478893,
+      "opaquePixels": 522013,
+      "alphaBounds": [
+        115,
+        51,
+        909,
+        973
+      ]
+    }
+  }
+}

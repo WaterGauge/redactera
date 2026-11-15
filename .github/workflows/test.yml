@@ -1,0 +1,126 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, experimental]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        node-version: [24.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Run unit tests with coverage (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npm run test:coverage
+      - name: Run unit tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm test
+      - name: Archive TypeScript coverage
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-latest'
+        with:
+          name: coverage-typescript-macos-attempt-${{ github.run_attempt }}
+          path: coverage/lcov.info
+          if-no-files-found: error
+
+  python-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare pinned release Python
+        run: node scripts/prepare-release-python.cjs
+      - name: Install dependencies
+        run: |
+          cd python-backend
+          python -m pip install -r requirements.txt
+      - name: Verify generated application icons
+        run: python scripts/generate-icons.py --check
+      - name: Run mypy
+        run: cd python-backend && python -m mypy --config-file mypy.ini main.py pdf_processor.py request_context.py diagnostics.py paddle_http.py build_info.py build_backend.py windows_lifecycle.py
+      - name: Run Python tests with coverage (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cd python-backend && python -m pytest --cov=. --cov-report=xml
+      - name: Run Python tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cd python-backend && python -m pytest
+      - name: Archive Python coverage
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-latest'
+        with:
+          name: coverage-python-macos-attempt-${{ github.run_attempt }}
+          path: python-backend/coverage.xml
+          if-no-files-found: error
+
+  # Source-production-Main gate; packaged builds remain a separate release check.
+  e2e-tests:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+      - name: Prepare pinned release Python
+        run: node scripts/prepare-release-python.cjs
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install Python dependencies
+        run: python -m pip install -r python-backend/requirements.txt
+      - name: Install Tesseract (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract
+      - name: Prepare pinned Windows Tesseract
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          executable="$(node scripts/prepare-windows-ocr.cjs)"
+          printf 'PDF_TESSERACT_PATH=%s\n' "$executable" >> "$GITHUB_ENV"
+          node -p 'require("node:path").dirname(process.argv[1])' "$executable" >> "$GITHUB_PATH"
+      - name: Prepare pinned OCR languages
+        run: node scripts/prepare-ocr-languages.cjs
+      - name: Check application, E2E and build types
+        run: npm run typecheck
+      - name: Run actual Main and backend workflow
+        run: npm run test:e2e
+        env:
+          PDF_TESSDATA_DIR: ${{ github.workspace }}/.project-state/ocr-data
+      - name: Upload isolated run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-e2e-${{ matrix.os }}-attempt-${{ github.run_attempt }}
+          path: |
+            .project-state/e2e/runs/latest.json
+            .project-state/e2e/runs/run-*/*.json
+            .project-state/e2e/runs/run-*/*.log
+            .project-state/e2e/runs/run-*/failure-*.png
+          include-hidden-files: true
+          if-no-files-found: error
