@@ -18,6 +18,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import pymupdf as fitz
 
 from build_info import checked_tesseract_version, runtime_versions, source_contract
+from source_inventory import backend_files
 
 LANGUAGES = ("eng", "chi_sim", "chi_tra")
 
@@ -150,6 +151,19 @@ def build() -> None:
         raise RuntimeError("Release builds require the pinned Python and OpenSSL versions")
     if fitz.VersionBind != upstream["pymupdfVersion"] or fitz.VersionFitz != upstream["mupdfVersion"]:
         raise RuntimeError("Installed PDF engine does not match the corresponding release source")
+    release_commit = None
+    if os.environ.get("PDF_REQUIRE_RELEASE_RUNTIME") == "1":
+        release_commit = subprocess.check_output(["git", "rev-parse", "--verify",
+            os.environ.get("PDF_RELEASE_SOURCE_COMMIT", "HEAD") + "^{commit}"], cwd=root, text=True).strip()
+
+    def verify_release_source() -> None:
+        if release_commit is not None:
+            names = [*backend_files(root), "scripts/release-upstream.json", "package.json"]
+            inputs = {name: sha256(root / name) for name in names}
+            subprocess.run([sys.executable, str(root / "scripts/verify-release-source.py"), str(root), release_commit],
+                           input=json.dumps(inputs), text=True, check=True, timeout=120)
+
+    verify_release_source()
     identity = source_contract()
     resources = ocr_resources()
     base = root / ".project-state/backend-builds"
@@ -189,6 +203,7 @@ def build() -> None:
         raise RuntimeError("Frozen PDF engine or HTTP client does not match the build environment")
     if any(check.get(name) != version for name, version in runtime.items()):
         raise RuntimeError("Frozen Python or OpenSSL does not match the build environment")
+    verify_release_source()
     openssl_license = root / "python-backend/openssl-license.txt" if runtime["openssl"] == pinned_runtime["openssl"] else None
     notices_sha256 = write_python_notices(run, root / "LICENSE", openssl_license)
     manifest = {"contract": identity, "platform": sys.platform, "arch": architecture, "executable": executable.name,

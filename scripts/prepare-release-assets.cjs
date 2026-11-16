@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { verifyReleaseVersion } = require('./release-version.cjs');
+const { applicationSource } = require('./backend-contract.cjs');
 
 function installerFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -23,6 +24,7 @@ function prepare(input, output, root, ref) {
   if (git(['rev-parse', 'HEAD']) !== commit || git(['status', '--porcelain', '--untracked-files=no'])) {
     throw Error('Release assets require a clean tracked checkout of the tagged commit');
   }
+  applicationSource(root, commit);
   git(['cat-file', '-e', commit + ':LICENSE']);
   if (fs.existsSync(output)) throw Error('The release output directory must not already exist');
   const files = ['macOS', 'Windows'].map(platform => {

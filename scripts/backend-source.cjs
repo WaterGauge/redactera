@@ -1,6 +1,7 @@
 // Canonical backend input inventory; keep in sync with python-backend/source_inventory.py.
 const fs = require('node:fs');
 const path = require('node:path');
+const cp = require('node:child_process');
 
 const rootExcluded = new Set(['tests', 'build', 'dist', 'coverage', 'htmlcov', 'venv', 'env',
   'node_modules', 'tmp', 'temp', 'logs', 'coverage.xml']);
@@ -42,7 +43,16 @@ function backendFiles(root) {
     }
   };
   visit(base);
-  return files.sort();
+  files.sort();
+  if (process.platform === 'win32') {
+    // libuv lstat does not expose every reparse attribute. Require the same
+    // native Python inventory before accepting a Windows source identity.
+    const python = process.env.PDF_BUILD_PYTHON || 'python';
+    const output = cp.execFileSync(python, [path.join(__dirname, '../python-backend/source_inventory.py'),
+      '--inventory', path.resolve(root)], { encoding: 'utf8', timeout: 30000 });
+    if (JSON.stringify(JSON.parse(output)) !== JSON.stringify(files)) throw Error('Windows backend inventories differ');
+  }
+  return files;
 }
 
 module.exports = { backendFiles };

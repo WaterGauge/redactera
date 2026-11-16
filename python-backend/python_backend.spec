@@ -8,7 +8,7 @@ from pathlib import Path
 source_directory = Path(SPEC).resolve().parent
 sys.path.insert(0, str(source_directory))
 from build_info import source_contract
-from source_inventory import verify_runtime_sources
+from source_inventory import verify_analysis_toc
 
 input_path = os.environ.get('PDF_BACKEND_BUILD_INPUT')
 if not input_path or not Path(input_path).is_absolute():
@@ -55,8 +55,7 @@ a = Analysis(
     optimize=0,
 )
 # Check the actual collected Python sources, not only the input hash.
-verify_runtime_sources(source_directory.parent, (source for _, source, _ in [*a.pure, *a.scripts]
-                                                  if isinstance(source, str) and source))
+verify_analysis_toc(source_directory.parent, [*a.pure, *a.scripts])
 if sys.platform == "win32":
     # Use the installed Microsoft x64 redistributable at runtime. PyInstaller
     # can otherwise pick up a machine's copy while resolving MuPDF imports.

@@ -42,4 +42,6 @@ Python 与 Node 使用同一递归输入规则：对 `python-backend/` 中未排
 
 后端源文件及目录名使用 ASCII 字母、数字、下划线、点和连字符，首字符为字母、数字或下划线，不使用末尾点、Windows 设备保留名或大小写冲突名。生产输入禁止符号链接、目录联接及特殊文件。所有层级排除隐藏项、`__pycache__`、`.pyc`、`.pyo`；仅后端根层保留 `tests`、`build`、`dist`、`coverage`、`htmlcov`、`venv`、`env`、`node_modules`、`tmp`、`temp`、`logs`、`coverage.xml` 作为非生产用途（不区分大小写）。不得从排除项导入生产模块或加载生产资源；本地私有资料与生成产物应放在项目专用状态目录或其他隔离位置，不放进生产树。此命名规则不限制用户打开或导出的文件名。
 
-从后端目录运行 `python source_inventory.py --check-types`，对同一输入集合中的所有 Python 模块执行 mypy。冻结构建对 PyInstaller Analysis 实际收集的 Python 源文件逐项检查，当前仅原生构建入口 `build_backend.py` 是明确的构建专用模块例外。Analysis 同时拒绝实际收集到的未列入清单的后端目录内模块；所选解释器在根层 `venv`、`env` 或 `.venv` 下的环境依赖继续由原依赖与许可检查约束。新增动态导入、模型、词表、原生库等资源仍需显式核对冻结配置、实际产物、许可与来源；源码摘要不能替代资源打包与成品验证。
+从后端目录运行 `python source_inventory.py --check-types`，对同一输入集合中的所有 Python 模块执行 mypy。冻结构建对 PyInstaller Analysis 实际收集的 Python 源文件逐项检查，当前仅原生构建入口 `build_backend.py` 是明确的构建专用模块例外。Analysis 同时拒绝未列入清单的项目模块及未声明的外部来源；只允许实际解释器标准库与其选定库目录内由已安装发行包记录的源文件，不将整个虚拟环境视为可信来源。Windows Node 枚举还须与原生 Python 枚举一致，后者检查 Windows 文件属性。新增动态导入、模型、词表、原生库等资源仍需显式核对冻结配置、实际产物、许可与来源；源码摘要不能替代资源打包与成品验证。
+
+正式构建设置 `PDF_REQUIRE_RELEASE_RUNTIME=1`，以 `PDF_RELEASE_SOURCE_COMMIT`（未指定时为起始 HEAD）固定源码提交；参与身份的文件必须属于该提交，实际工作树及 Git 对应源码归档的全部跟踪字节必须一致。正式构建前后与发布归档准备时检查，未跟踪或被忽略的生产输入、Git 导出转换或字节不一致即失败。普通开发及无 Git 的公开源码归档构建不启用正式发行门禁，仍保留原有身份及资源检查。

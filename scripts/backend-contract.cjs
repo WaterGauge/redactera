@@ -7,7 +7,8 @@ const { backendFiles } = require('./backend-source.cjs');
 const pythonLicensesFile = 'python-licenses.zip';
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
-function applicationSource(root) {
+function applicationSource(root, releaseCommit = process.env.PDF_REQUIRE_RELEASE_RUNTIME === '1'
+  ? process.env.PDF_RELEASE_SOURCE_COMMIT || 'HEAD' : undefined) {
   const files = [];
   const collect = (directory, extensions) => {
     if (!fs.existsSync(directory)) return;
@@ -36,6 +37,11 @@ function applicationSource(root) {
   }
   const relative = files.map(file => path.relative(root, file).split(path.sep).join('/')).sort();
   const hashes = Object.fromEntries(relative.map(file => [file, sha256(fs.readFileSync(path.join(root, file)))]));
+  if (releaseCommit !== undefined) {
+    const python = process.env.PDF_BUILD_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+    cp.execFileSync(python, [path.join(__dirname, 'verify-release-source.py'), path.resolve(root), releaseCommit],
+      { input: JSON.stringify(hashes), encoding: 'utf8', timeout: 120000 });
+  }
   return { sha256: sha256(JSON.stringify(hashes)), files: hashes };
 }
 

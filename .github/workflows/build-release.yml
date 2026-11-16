@@ -110,6 +110,7 @@ jobs:
       GIT_CONFIG_KEY_0: core.autocrlf
       GIT_CONFIG_VALUE_0: 'false'
       PDF_REQUIRE_RELEASE_RUNTIME: '1'
+      PDF_RELEASE_SOURCE_COMMIT: ${{ github.sha }}
 
     steps:
       - name: Checkout
