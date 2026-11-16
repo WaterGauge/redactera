@@ -2,9 +2,12 @@ name: Tests
 
 on:
   push:
-    branches: [main, experimental]
+    branches: [main, develop]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   unit-tests:

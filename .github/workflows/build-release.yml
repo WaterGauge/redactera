@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     branches:
-      - experimental
+      - develop
     paths:
       - 'package.json'
       - '.github/workflows/build-release.yml'
@@ -94,7 +94,7 @@ jobs:
 
   build:
     needs: preflight
-    if: ${{ !cancelled() && (needs.preflight.result == 'success' || (github.ref == 'refs/heads/experimental' && needs.preflight.result == 'skipped')) }}
+    if: ${{ !cancelled() && (needs.preflight.result == 'success' || (github.ref == 'refs/heads/develop' && needs.preflight.result == 'skipped')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -225,7 +225,7 @@ jobs:
 
   draft_release:
     name: Prepare a joint draft release
-    if: github.ref_type == 'tag'
+    if: ${{ github.ref_type == 'tag' && vars.REDACTERA_RELEASE_ASSET_SOURCE != 'local' }}
     needs: build
     runs-on: ubuntu-latest
     permissions:

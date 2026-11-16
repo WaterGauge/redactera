@@ -4,7 +4,7 @@
 
 `alpha.N` 用于早期验证，`beta.N` 用于功能基本完成后的测试，`rc.N` 用于发布候选。每个阶段的序号从 1 开始，同阶段依次增加。正式版使用三段版本号，例如 `2.0.0`。Git 标签加小写 `v`，例如 `v2.0.0-rc.1`。预发布标记为 prerelease。历史 debug 构建保留在[变更日志](../CHANGELOG.md)中。
 
-`experimental` 是集成分支。稳定版来自 `main` 已验收的提交。稳定版热修复以受影响的稳定源码为基线，发布修订版后再同步修复到集成分支。
+`develop` 是集成分支。稳定版来自 `main` 已验收的提交。稳定版热修复以受影响的稳定源码为基线，发布修订版后再同步到 `develop`。
 
 ## 发布检查
 
@@ -17,7 +17,7 @@
 
 Windows Setup 只携带一个完整包，保留旧版安装标识。打包时用更新器实际使用的 NuGet 读取器打开完整包清单。Windows 发行门禁核对实际 Setup 的启动器代码、完整包的原始 ZIP 条目和包字节、两份更新器及随包的安装器许可。启动器和更新器的构建脚本、上游源码锁和补丁包含在项目源码归档中。
 
-`experimental` 上的版本变更会构建两端候选并上传到该次 CI 的产物。标签触发的构建在双端验收后准备 GitHub Release 草稿。
+`develop` 上的版本和构建配置变更会构建两端候选并上传到该次 CI 的产物。版本标签触发双端验证。验证通过后，默认由工作流准备 GitHub Release 草稿。采用已验收的本地发行附件时，维护者在推送版本标签前设置 `REDACTERA_RELEASE_ASSET_SOURCE=local`，再用同一套已验收附件准备草稿。
 
 公开发行从 Redactera 2.0.0 开始。2.0.0 及后续版本通过 [WaterGauge/redactera 的公开 Releases](https://github.com/WaterGauge/redactera/releases) 检查更新和下载。测试者可使用获授权的账号下载私有验证产物。
 
