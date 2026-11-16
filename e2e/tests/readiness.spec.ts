@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { observations, run, selectFile } from '../helpers/test-helpers';
 import pkg from '../../package.json';
+import { verifyElectronRuntime } from '../support/runtime-identity';
 
 // Read readiness and text in one renderer task; React replaces the text element.
 const previewText = () => browser.execute(() => {
@@ -35,7 +36,7 @@ describe('Native startup and preview observations', () => {
     } else if (runtime.platform === 'win32') {
       expect(runtime.menuLabels).toBeNull();
     }
-    expect(runtime).toMatchObject({ electron: pkg.devDependencies.electron });
+    verifyElectronRuntime(runtime);
     fs.writeFileSync(path.join(run, 'runtime-versions.json'), JSON.stringify(runtime, null, 2));
     if (runtime.packaged) expect(runtime.appName).toBe(pkg.productName);
     expect(await browser.execute(() => typeof window.require)).toBe('undefined');

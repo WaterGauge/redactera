@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { createSettingsManager } from '../../src/main/settingsManager';
 import { DEFAULT_SETTINGS } from '../../src/types/settings';
+import { verifyElectronRuntime } from './runtime-identity';
 
 const run = process.env.PDF_STORAGE_RUN as string;
 const phase = process.env.PDF_STORAGE_PHASE as string;
@@ -24,7 +25,8 @@ void app.whenReady().then(() => {
   const dummy = Object.fromEntries(fields.map(key => [key, 'synthetic-' + createHash('sha256').update(owner.runId + key).digest('hex')]));
   const file = manager.getSettingsPath();
   const report: Record<string, unknown> = { phase, realSafeStorage: true, realFileSystem: true,
-    electron: process.versions.electron, platform: process.platform, arch: process.arch, verified: false };
+    electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome,
+    platform: process.platform, arch: process.arch, verified: false };
   const checkCipher = () => {
     const raw = fs.readFileSync(file, 'utf8'), disk = JSON.parse(raw);
     assert.equal(disk._encrypted, true);
@@ -37,6 +39,7 @@ void app.whenReady().then(() => {
     return raw;
   };
   try {
+    verifyElectronRuntime(process.versions);
     report.encryptionAvailable = safeStorage.isEncryptionAvailable();
     assert(report.encryptionAvailable);
     if (phase === 'save') {

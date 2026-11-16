@@ -41,7 +41,9 @@ def _windows_ocr_data(png: bytes, lang: str, timeout: float | None, psm: int | N
 
 
 def read_ocr_data(png: bytes, lang: str, *, timeout: float | None = None, psm: int | None = None) -> dict[str, list[Any]]:
-    with Image.open(io.BytesIO(png)) as image:
+    # The input contract is an internally rendered PNG, not an arbitrary image
+    # container. Do not dispatch unrelated Pillow decoders at this boundary.
+    with Image.open(io.BytesIO(png), formats=['PNG']) as image:
         if sys.platform == 'win32':
             # Match the PNG pytesseract previously saved, including omission
             # of optional DPI metadata. Changing transport should not change OCR.

@@ -9,6 +9,7 @@ import { diagnosticErrorKind } from './diagnostics';
 import { backendStartupFailure } from '../utils/backendStartupFailure';
 import { BACKEND_CONTRACT, type BackendContract } from './backendContract';
 import { BackendFrames, type BackendFrameLimits } from './backendFrames';
+import { freshBackendEnvironment } from './backendLaunchEnv';
 
 const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
 const PYTHON_RESTART_BASE_DELAY_MS = 1000;
@@ -219,7 +220,7 @@ export function createPythonProcessManager({
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       detached: process.platform !== 'win32',
-      env: process.platform === 'win32'
+      env: freshBackendEnvironment(process.platform === 'win32'
         ? {
             ...process.env,
             ...temporaryEnvironment,
@@ -235,7 +236,7 @@ export function createPythonProcessManager({
             ...launch?.environment,
             LOG_ENABLED: settings.developer_mode ? '1' : '0',
             LOG_FILE_PATH: pythonLogPath,
-          },
+          }),
     });
 
     pythonProcess = spawnedProcess;

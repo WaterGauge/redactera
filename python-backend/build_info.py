@@ -86,7 +86,7 @@ def self_check() -> dict[str, Any]:
             if sys.platform == "win32":
                 recognized = " ".join(word for word in read_ocr_data(png, language, timeout=20, psm=7)["text"] if word)
             else:
-                with Image.open(io.BytesIO(png)) as image:
+                with Image.open(io.BytesIO(png), formats=["PNG"]) as image:
                     recognized = pytesseract.image_to_string(image, lang=language, config="--psm 7", timeout=20)
             if "".join(text.split()) not in "".join(recognized.split()):
                 raise RuntimeError("Bundled OCR recognition failed: " + language)

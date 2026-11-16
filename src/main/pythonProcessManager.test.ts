@@ -61,6 +61,7 @@ describe('pythonProcessManager', () => {
   });
 
   it('spawns python with dev logging settings in unpackaged mode', () => {
+    vi.stubEnv('_PYI_ARCHIVE_FILE', 'synthetic-old-state');
     const fakeProcess = createFakePythonProcess();
     const spawn = vi.fn(() => fakeProcess);
     const logger = { log: vi.fn() };
@@ -91,10 +92,12 @@ describe('pythonProcessManager', () => {
         env: expect.objectContaining({
           TMPDIR: '/app/temp', TEMP: '/app/temp', TMP: '/app/temp',
           LOG_ENABLED: '1',
-          LOG_FILE_PATH: expectedLogFilePath,
+          LOG_FILE_PATH: expectedLogFilePath, PYINSTALLER_RESET_ENVIRONMENT: '1',
         }),
       })
     );
+    expect(spawn.mock.calls[0]).toHaveLength(3);
+    expect((spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env._PYI_ARCHIVE_FILE).toBeUndefined();
     expect(logger.log).toHaveBeenCalledWith(
       '[Python] launch mode: source',
       'DEBUG'

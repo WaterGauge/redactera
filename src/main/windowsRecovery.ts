@@ -1,6 +1,7 @@
 import childProcess from 'child_process';
 import { createHash } from 'crypto';
 import { diagnosticErrorKind } from './diagnostics';
+import { freshBackendEnvironment } from './backendLaunchEnv';
 
 export type ProcessIdentity = { state: 'present'; started: string } | { state: 'absent' | 'unknown' };
 export interface WindowsSnapshot {
@@ -42,7 +43,7 @@ export function createWindowsRecoveryProbe(options: {
         const query = (timeout: number) => spawn(options.command,
           [...options.args, '--session-probe'], {
             cwd: options.cwd, windowsHide: true, timeout, maxBuffer: 256 * 1024,
-            encoding: 'utf8', input,
+            encoding: 'utf8', input, env: freshBackendEnvironment(process.env),
           });
         let result = query(5000);
         // A cold frozen executable can outlast the initial observation budget.

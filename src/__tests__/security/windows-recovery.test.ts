@@ -128,6 +128,7 @@ it('retries a timed-out native observation once before accepting independent exi
   expect(probe([12], ['job'])).toEqual({ processes: { 12: { state: 'absent' } }, jobs: { job: 'empty' } });
   expect(spawn).toHaveBeenCalledTimes(2);
   expect(spawn.mock.calls[0][1]).toEqual(['main.py', '--session-probe']);
+  expect(spawn.mock.calls[0][2]).toMatchObject({ env: { PYINSTALLER_RESET_ENVIRONMENT: '1' } });
   expect(spawn.mock.calls[0][2].timeout).toBe(5000);
   expect(spawn.mock.calls[1][2]).toEqual({ ...spawn.mock.calls[0][2], timeout: 15000 });
 });

@@ -38,3 +38,48 @@ def test_windows_engine_failure_preserves_timeout_without_returning_ocr_content(
     with pytest.raises(expected) as error:
         local_ocr._windows_ocr_data(b'png', 'eng', 5, None)
     assert 'private' not in str(error.value)
+
+
+@pytest.mark.parametrize('kind', ['JPEG', 'GIF', 'TIFF', 'BMP', 'JPEG2000'])
+def test_local_ocr_accepts_only_internal_png(monkeypatch, kind):
+    import io
+    from PIL import Image, UnidentifiedImageError
+    image = Image.new('RGB', (16, 16), 'white')
+    alternate = io.BytesIO()
+    image.save(alternate, format=kind)
+    # A real, harmless image would be accepted by the generic decoder.
+    with Image.open(io.BytesIO(alternate.getvalue())) as decoded:
+        assert decoded.format == kind
+    windows = Mock()
+    other = Mock()
+    monkeypatch.setattr(local_ocr, '_windows_ocr_data', windows)
+    monkeypatch.setattr(local_ocr.pytesseract, 'image_to_data', other)
+    with pytest.raises(UnidentifiedImageError):
+        local_ocr.read_ocr_data(alternate.getvalue(), 'eng')
+    windows.assert_not_called()
+    other.assert_not_called()
+
+
+@pytest.mark.parametrize('system', ['win32', 'darwin'])
+def test_internal_png_reaches_the_same_ocr_transport(monkeypatch, system):
+    import io
+    from PIL import Image
+    pixels = Image.new('RGB', (16, 16), 'white')
+    image = io.BytesIO()
+    pixels.save(image, format='PNG')
+    monkeypatch.setattr(local_ocr.sys, 'platform', system)
+    expected = {'text': ['synthetic']}
+    windows = Mock(return_value=expected)
+    other = Mock(return_value=expected)
+    monkeypatch.setattr(local_ocr, '_windows_ocr_data', windows)
+    monkeypatch.setattr(local_ocr.pytesseract, 'image_to_data', other)
+    assert local_ocr.read_ocr_data(image.getvalue(), 'eng', timeout=5, psm=7) == expected
+    if system == 'win32':
+        data, lang, timeout, psm = windows.call_args.args
+        assert (lang, timeout, psm) == ('eng', 5, 7)
+        with Image.open(io.BytesIO(data)) as decoded:
+            assert decoded.format == 'PNG' and decoded.tobytes() == pixels.tobytes()
+        other.assert_not_called()
+    else:
+        other.assert_called_once()
+        windows.assert_not_called()
