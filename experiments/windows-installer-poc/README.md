@@ -1,49 +1,52 @@
 # Windows installer candidate experiment (not a release)
 
-This isolated PoC tests WiX v7 Burn + a single dual-purpose x64 MSI with a synthetic marker only. It is not a technical selection, not a release package, and not integrated into Electron Forge, application code, package scripts or CI. Do not install on a real workstation, use any actual application data or ship the bundle. Use authorized disposable Windows 11 and Windows 10 22H2 x64 snapshots with synthetic standard user A and separate admin B. Keep existing shared runtimes on host machines unchanged.
+This isolated PoC tests WiX 7.0.1 Burn + one dual-purpose x64 MSI with a synthetic marker only. It is not a technology selection, a release package or an Electron Forge integration. Do not install on a real workstation, use actual user data or distribute it. Use authorized disposable Windows 11 and Windows 10 22H2 x64 snapshots, synthetic standard user A and separate administrator B. Never remove or damage a shared runtime on a host.
 
-## Source and build
+## Approved offline build inputs and identity
 
-- `Package.wxs`: distinct synthetic identities, default per-user, Windows Installer folder/registry redirection, embedded cabinet. No actual Redactera settings, registry, shortcuts, DPAPI, migrations, services, custom actions, or recursive cleanup. The test intentionally uses only default directories; it does not solve custom path/ACL validation or scope conversion.
-- `Bundle.wxs`: native stock WixStdBA for the scope test, embedded official x64 VC redistributable then MSI. A machine prerequisite is permanent and vital. Detect uses the x64 registry Installed value and version threshold. Nonzero codes other than explicit reboot statuses fail, including 1638; never assume a competing install means success. The native x64 Windows client gate is for this experiment, not a new production support policy. No remote payloads.
-- `Build-Poc.ps1`: explicit approved offline inputs only. The operator must first establish WiX/extension fees, licenses, toolchain integrity and Microsoft redistribution rights; no auto-acceptance or downloads. Provide locally provisioned WiX v7 + matching Bal/Util extension DLLs, Microsoft x64 redist and hashes in a local JSON with keys `wix`, `bal`, `util`, `vcRedist` (each object has absolute `path` and `sha256`), `wixVersion` (exact CLI output), `minimumVcVersion` (four numeric fields, established by the native test). Hash checks here cover the named inputs; the complete SDK/toolchain and its dependencies must separately be pinned. Verify the redist really is x64 and has an adequate version before approving the manifest. No placeholder lock, no real binary in Git. Build as non-elevated native Windows x64:
-  
-  ```powershell
-  .\Build-Poc.ps1 -InputsJson C:\isolated\approved-inputs.json -OutputDirectory C:\isolated\poc-build-1 -ApprovedOfflineInputs
-  ```
-  
-  Use a fresh absolute output directory. The build stages both source files and marker beside the approved prerequisite, binds from that directory, and verifies staged input hashes before and after building. Build one artifact set and preserve its hashes across all snapshots. Require actual MSI validation (including ICE105), inspect Property/Directory/Registry tables for the intended scope and payload, inspect Burn chain and attachment; do not suppress failed validation. The script does not run either installer. No production installer identity is allocated here.
+- Package.wxs: synthetic family/component GUIDs, default per-user, Windows Installer directory/registry redirection, embedded cabinet; no actual application settings, shortcuts, DPAPI, migrations, services, custom actions or recursive cleanup. Default paths only; no custom path/ACL or scope-conversion implementation.
+- Bundle.wxs: stock native WixStdBA, embedded official x64 VC redistributable then MSI. The machine dependency is permanent/vital; x64 registry Installed and minimum version detection; 0, 3010, 1641 distinguished; other exits fail (including 1638). No remote payloads.
+- Build-Poc.ps1 and PocNative.ps1: use a non-elevated native Windows x64 process. Only a locally provisioned, specifically approved toolchain and fully qualified fixed-drive paths with no linked ancestors. No download, no auto-acceptance of agreements, no execution of installers. Stop if license, fee, dependency integrity or native validation fails. Do not relax permissions or disable validation.
+
+The independently prepared and approved local JSON must contain sourceCommit/sourceTree (40 lowercase hex), sourceHashes (SHA256 for **all nine experiment files**), wixVersion (exact approved 7.0.1 CLI output), minimumVcVersion (four-field numeric v14 minimum justified by actual dependencies), and wix, bal, util, vcRedist objects (absolute local path and lowercase sha256). Prepare the full SDK/CLI/extension dependency closure, licenses, provenance and actual x64 VC payload evidence independently; the script's named input hashes are not the entire toolchain lock. Never guess a hash or adopt the test fixture's VC threshold. The approved manifest is separate from build outputs; do not regenerate it from an unverified local tree.
+
+```powershell
+.\Build-Poc.ps1 -InputsJson C:\isolated\approved-inputs.json -OutputDirectory C:\isolated\poc-build-1 -ApprovedOfflineInputs
+```
+
+Use a fresh, absolute output directory with an existing trusted parent. Before and after the build all staged sources and VC bytes are checked against approved input hashes. After building MSI, run WiX CLI default MSI validation (WiX's own stock exclusions apply; no project suppressions) and explicitly `wix msi validate -ice ICE105`. Record both commands, exit codes, logs and unchanged MSI hash; inspect the real log and verify the ICE actually ran, including a deliberate failure in a separately approved synthetic test. Nonzero/missing exit or changed bytes prevents creation of artifact.json. Read-only MSI database queries bind ProductCode, UpgradeCode, ProductName, ALLUSERS and MSIINSTALLPERUSER. Burn extraction binds the actual registration Code and PrimaryUpgradeCode, chained MSI ProductCode and extracted embedded MSI/VC bytes. Preserve the complete build directory and independently inspect actual MSI tables/architecture, full toolchain closure, logs, embedded payload and Burn manifest before authorizing installation. No real product GUIDs are allocated.
 
 ## Native test protocol (manual authorized execution)
 
-Use a fresh snapshot for each scope and runtime state. Record Windows SKU, build, patch, VM/snapshot label, source commit/tree, actual artifact manifest, disconnected network evidence, original non-elevated login, UAC observations, Burn/MSI logs, exit/reboot status. Retain raw logs locally and sanitize before sharing. Do not invoke `Win32_Product` (can trigger MSI consistency checks). Do not delete system DLLs or uninstall a shared runtime on a host. Use a licensed, isolated clean snapshot instead.
+Use a fresh snapshot for each scope and runtime state; record OS/SKU/build/UBR, VM/snapshot label, source identity, actual artifact SHA256, disconnected network evidence, non-elevated original user, UAC observations, real Burn/MSI logs, exit/reboot status and actual cache/ACL. The same EXE must be used across both target systems. Do not invoke Win32_Product. Do not delete shared DLLs or uninstall shared VC on a host. Inspect logs locally and sanitize before sharing.
 
-For each scope, take eight read-only JSON observations, in order A/B baseline, A/B installed, A/B repaired, A/B removed. Use the same fresh randomly chosen RunId for both logins and all phases, same bundle bytes. From each non-elevated login run (substitute the actual GUID and phase):
+For each successful lifecycle collect eight read-only JSON observations in order A/B baseline, A/B installed, A/B repaired, A/B removed. Same fresh random RunId, same artifact.json and bundle bytes. Each actual account runs the observer non-elevated:
 
 ```powershell
-.\Get-PocState.ps1 -RunId 'a81cb8a7-30c2-4e04-a049-aeb8831ce10e' -Phase baseline -BundlePath C:\isolated\poc-build-1\RedacteraInstallerPoC-Setup.exe
+.\Get-PocState.ps1 -RunId 'a81cb8a7-30c2-4e04-a049-aeb8831ce10e' -Phase baseline -ArtifactPath C:\isolated\poc-build-1\artifact.json -BundlePath C:\isolated\poc-build-1\RedacteraInstallerPoC-Setup.exe
 ```
 
-Redirect output to an isolated local JSON file if desired. No raw SID, paths or names emitted in successful JSON; the account token is salted by RunId for comparison within a run only. Each observation checks the expected default marker location, exact marker registry value, visible bundle and hidden/registered MSI in the current user's and machine's uninstall registry views, plus x64 VC registration. It is not a full MSI enumeration, ACL audit, or actual runtime load test. The script can fail instead of interpreting access errors as absence. Do not collect A's snapshot as B. Record stock BA scope and actual UAC behavior separately.
+The observer checks exact compiled ProductCode and Burn registration Code, matching related MSI and Burn family registrations (including hidden/name-changed entries), both registry views, actual MsiEnumProductsEx contexts, marker bytes and x64 runtime registration. It does not enumerate other users from A or expose raw SIDs, personal paths or names. The RunId-salted account token is not an attestation. Independently verify account privilege/host/snapshot, cache paths, ACL and real VC load; exact receipts do not prove all these facts. Capture cancelled observations and real logs separately; the eight-receipt checker is for successful lifecycles only.
 
 | Case | Action and mandatory evidence |
 | --- | --- |
-| 01-A | Compatible runtime, A chooses current user, B never supplies credentials: no elevation, A-only marker and registration; B has no user install; correct maintenance entry. |
-| 01-B | Missing or old x64 runtime, A chooses current user, B authorizes prerequisite only: exact bundled runtime installed, no network, marker still belongs to A; B user profile unchanged. |
-| 01-C | Machine installation requested by A, B authorizes: marker under machine Program Files, machine registration visible to both, no per-user marker. Verify normal A cannot modify installed payload; do not change ACL to make test pass. |
-| 01-D | Already newer compatible runtime: skipped, no downgrade or redundant execution, verify real chain logs. Test x86-only baseline separately; it must not satisfy x64 requirement. |
-| 01-E | A refuses UAC (prerequisite and machine scope separately); cancel during detection/plan/apply as applicable: no falsely successful marker/registration. Use cancelled observations and logs; the checker below is only for successful lifecycles. |
-| 01-F | Repair from original scope after deleting ONLY the synthetic marker in the isolated test snapshot (for machine case use explicitly authorized operator); check restored bytes, no changed scope, actual MSI maintenance. |
-| 01-G | Uninstall from original scope using normal bundle maintenance entry: remove owned marker/registration, never remove shared VC runtime; B remains unaffected. |
-| 01-H | Force prerequisite failure/restart and MSI failure in separately authorized isolated experiments; no successful final receipt, rollback and actual restart disposition. Do not relabel a substitute or simulated failure as real chain evidence. |
+| 01-A | Compatible runtime, A chooses current user: no UAC, A-only marker/registration/context, correct maintenance entry, B unaffected. |
+| 01-B | Missing/old x64 runtime, A chooses current user, B authorizes prerequisite: exact bundled runtime, no network, A remains installation owner; B user profile unchanged. |
+| 01-C | A requests machine install, B authorizes: machine Program Files, machine registration visible to both, no personal marker; A cannot modify installed payload. |
+| 01-D | Existing equal/newer VC skipped, no downgrade; x86-only, missing/invalid registry values, minimum boundary, real x64 /MD load probe. |
+| 01-E | Refuse UAC separately for prerequisite and machine scope; cancel during detect/plan/apply. No false success; actual final state/logs. |
+| 01-F | Repair original scope after removing only the synthetic marker in an authorized isolated snapshot; no scope conversion, restored bytes, real maintenance/cache; corrupt/missing cache negative control. |
+| 01-G | Uninstall from original maintenance entry; exact identity and all hidden remnants absent, shared VC retained, other account unchanged. |
+| 01-H | Actual prerequisite/MSI failure, rollback, restart 3010/1641 in separately authorized snapshot; B cannot take over A's resume. Do not simulate exit code and claim native evidence. |
+| 01-I | Hidden bundle, wrong product/bundle ID, extra family registration, marker only in wrong registry view, invalid relative/drive-relative/UNC path, reparse ancestor, existing output, wrong input bytes, same-ID duplicate machine views. Independently verify these negative controls and true ACL. |
 
-For successful lifecycles only, check narrow observation consistency (same native host metadata/run/setup, two distinct login tokens, scope, exact payload, registration counts, preserved VC version):
+For the successful lifecycles only, run the checker with the preserved build directory and independently approved input manifest:
 
 ```sh
-python verify_observations.py --artifact artifact.json --scope user A-base.json B-base.json A-install.json B-install.json A-repair.json B-repair.json A-remove.json B-remove.json
+python verify_observations.py --artifact poc-build-1/artifact.json --approved-inputs approved-inputs.json --scope user A-base.json B-base.json A-install.json B-install.json A-repair.json B-repair.json A-remove.json B-remove.json
 ```
 
-Exit 0 means only that those observations are consistent; it explicitly returns nativeAcceptance=false. It does not prove UAC, offline operation, ACL, restart, true VC load, or logs. A failed/partial/native-unavailable test is evidence insufficient, not accepted. Use separate run IDs for machine and user lifecycles and every snapshot. Do not manufacture receipts.
+It rejects missing/extra/duplicate JSON fields, invalid types, wrong v14 versions, mismatched source/approved hashes, altered MSI/EXE/VC/manifest/ICE logs or extracted payload bytes, mismatched receipt artifact hash, wrong IDs/context, hidden/extra/residual registrations and invalid scope. Exit 0 means observations-consistent only, always `nativeAcceptance=false`. It does not independently re-extract the EXE, verify signatures, prove log authenticity, confirm native execution or replace real UAC/cache/ACL/restart/rollback evidence. Actual build/ICE/observer/Windows tests remain required. No manufacturing receipts or changing policy to pass.
 
 ## Portable developer tests and follow-on
 
@@ -52,6 +55,6 @@ cd experiments/windows-installer-poc
 python -m unittest -v test_poc.py
 ```
 
-These test actual authored XML structure and the receipt checker using synthetic data. They do not compile WiX or execute PowerShell. Only after real PoC-01 evidence and independent review, implement custom WPF BA against the selected engine and then migration/recovery with actual old application identities and DPAPI. No automatic cross-scope conversion, no delta updates, no formal product integration. Stop on unapproved tool cost/license, failed native engine gates, or inability to establish rollback and user identity. All product acceptance remains outside this experiment.
+These tests parse authored XML, exercise strict receipt and artifact-byte contracts with synthetic inputs, and check explicit native-source gates. They do not execute PowerShell, C# P/Invoke, MSI validation, or compile/install WiX. Actual use requires independent review, license/tooling approval and authorized Windows snapshots. If the native engine cannot establish safe original-user identity, scope and recovery, stop and report the evidence; do not build a high-privilege replacement. Only after PoC-01 succeeds, proceed to WPF BA and Squirrel migration/DPAPI, preserving actual product identities. No automatic cross-scope conversion, delta updates or production integration here.
 
-Upstream implementation references: [WiX configurable scope](https://docs.firegiant.com/wix/whatsnew/configurable_scope_bundles/), [Microsoft dual-purpose authoring](https://learn.microsoft.com/en-us/windows/win32/msi/single-package-authoring), [VC redistributable detection and distribution](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files), [WiX command line](https://docs.firegiant.com/wix/tools/wixexe/), [WiX maintenance fee](https://docs.firegiant.com/wix/whatsnew/). These are authoring references, not proof of native operation or license approval.
+References: [WiX configurable scope](https://docs.firegiant.com/wix/whatsnew/configurable_scope_bundles/), [MSI dual-purpose authoring](https://learn.microsoft.com/en-us/windows/win32/msi/single-package-authoring), [WiX validation](https://docs.firegiant.com/wix/tools/validation/), [WiX CLI](https://docs.firegiant.com/wix/tools/wixexe/), [MsiEnumProductsEx](https://learn.microsoft.com/en-us/windows/win32/api/msi/nf-msi-msienumproductsexw), [VC redistribution](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files), [OSMF](https://docs.firegiant.com/wix/osmf/). These are references, not native acceptance or license authorization.
