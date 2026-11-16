@@ -9,7 +9,7 @@ npm run typecheck
 npm run lint
 # 在python-backend目录、已准备的Python环境中
 python -m pytest
-python -m mypy --config-file mypy.ini main.py pdf_processor.py request_context.py diagnostics.py paddle_http.py build_info.py build_backend.py windows_lifecycle.py
+python source_inventory.py --check-types
 ```
 
 先安装当前平台原生Tesseract及三语言数据；PDF_TEST_PYTHON指定现有测试解释器。运行以下入口会创建隔离profile和合成样本，启动真实Main/Preload/Renderer与后端：
@@ -34,3 +34,5 @@ GitHub Actions 的 Tests 在 macOS 和 Windows 上独立运行。每轮的 E2E �
 双平台发行验收使用对应系统的原生安装包，记录实际测试的系统、架构、应用版本和 SHA256。预览检查包含中文标题、不同缩放、大文件翻页和标题缺失的负控制。真实文件面板、安装升级、退出清理与系统凭据按变更范围分别验证。
 
 安装包检查同时比对当前应用源码摘要、ASAR 和冻结后端。Mac 检查 DMG 卷图标、签名、类别和设备用途文案。Windows 运行 npm run check:windows-release，从 Setup 提取并比对实际应用，检查安装器、主程序、更新器和启动器的项目图标。用同版本旧包与其配套镜像验证过期源码会被拒绝。
+
+递归源码身份专项测试在后端目录运行 `python -m pytest tests/test_source_inventory.py`（需要 Node 24 与项目 Python 环境），实际比较两种语言的摘要，检查嵌套模块、配置及资源增删改、排除项、旧冻结清单拒绝、类型检查与 Analysis 输入发现。随后在两个支持平台重新冻结并运行既有真实启动、OCR、打包及成品门禁；合成清单拒绝用例不替代实际冻结后端验证。

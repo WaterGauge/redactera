@@ -68,7 +68,7 @@ jobs:
       - name: Run mypy
         run: |
           cd python-backend
-          python -m mypy --config-file mypy.ini main.py pdf_processor.py request_context.py diagnostics.py paddle_http.py build_info.py build_backend.py windows_lifecycle.py
+          python source_inventory.py --check-types
         shell: bash
 
       - name: Run Python tests

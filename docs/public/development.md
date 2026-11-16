@@ -35,3 +35,11 @@ Windows 原生后端使用系统的 Microsoft Visual C++ x64 运行库。如需�
 ## 图标资源
 
 双平台原图、透明母版与生成说明在 [redactera-icon-sources](../../redactera-icon-sources/ASSET_NOTES.md)。修改图标后运行 `npm run icons:generate`，再运行 `npm run icons:check` 和 `npm run icons:verify`。生成环境沿用项目锁定的 Pillow 11.1.0，可通过 `PDF_BUILD_PYTHON` 指定 Python。构建会校验源文件与各尺寸资源的一致性。
+
+## 后端源码身份与子包
+
+Python 与 Node 使用同一递归输入规则：对 `python-backend/` 中未排除的普通文件按仓库相对路径（`/` 分隔，ASCII 字典序）计算原始字节 SHA256。后端身份继续绑定发行上游锁和应用版本；应用源码身份使用同一后端文件集合，但仍单独覆盖应用、构建配置及其他既有输入。新增、修改、删除或改名的生产子模块、配置及资源都需要重建，不得复用旧冻结后端。协议版本不变。
+
+后端源文件及目录名使用 ASCII 字母、数字、下划线、点和连字符，首字符为字母、数字或下划线，不使用末尾点、Windows 设备保留名或大小写冲突名。生产输入禁止符号链接、目录联接及特殊文件。所有层级排除隐藏项、`__pycache__`、`.pyc`、`.pyo`；仅后端根层保留 `tests`、`build`、`dist`、`coverage`、`htmlcov`、`venv`、`env`、`node_modules`、`tmp`、`temp`、`logs`、`coverage.xml` 作为非生产用途（不区分大小写）。不得从排除项导入生产模块或加载生产资源；本地私有资料与生成产物应放在项目专用状态目录或其他隔离位置，不放进生产树。此命名规则不限制用户打开或导出的文件名。
+
+从后端目录运行 `python source_inventory.py --check-types`，对同一输入集合中的所有 Python 模块执行 mypy。冻结构建对 PyInstaller Analysis 实际收集的 Python 源文件逐项检查，当前仅原生构建入口 `build_backend.py` 是明确的构建专用模块例外。新增动态导入、模型、词表、原生库等资源仍需显式核对冻结配置、实际产物、许可与来源；源码摘要不能替代资源打包与成品验证。

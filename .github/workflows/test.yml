@@ -60,7 +60,7 @@ jobs:
       - name: Verify generated application icons
         run: python scripts/generate-icons.py --check
       - name: Run mypy
-        run: cd python-backend && python -m mypy --config-file mypy.ini main.py pdf_processor.py request_context.py diagnostics.py paddle_http.py build_info.py build_backend.py windows_lifecycle.py
+        run: cd python-backend && python source_inventory.py --check-types
       - name: Run Python tests with coverage (macOS)
         if: matrix.os == 'macos-latest'
         run: cd python-backend && python -m pytest --cov=. --cov-report=xml

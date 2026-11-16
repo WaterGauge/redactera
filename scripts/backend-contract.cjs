@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
 const { verifyPackageNotices } = require('./package-notices.cjs');
+const { backendFiles } = require('./backend-source.cjs');
 const pythonLicensesFile = 'python-licenses.zip';
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
@@ -21,8 +22,7 @@ function applicationSource(root) {
   for (const directory of ['src', 'e2e', 'scripts']) collect(path.join(root, directory), sourceExtensions);
   collect(path.join(root, 'scripts/windows-installer'), ['.patch', '.txt']);
   // The packagers consume the final platform files, not local iconset intermediates.
-  const backend = path.join(root, 'python-backend');
-  for (const name of fs.readdirSync(backend).filter(name => /^[^.].*\.(py|spec|txt|ini)$/.test(name))) files.push(path.join(backend, name));
+  files.push(...backendFiles(root).map(name => path.join(root, name)));
   const configuration = ['package.json', 'package-lock.json', 'forge.config.ts', 'webpack.main.config.ts',
     'webpack.renderer.config.ts', 'webpack.rules.ts', 'webpack.plugins.ts', 'webpack.pdf-assets.ts',
     'tsconfig.json', 'tsconfig.e2e.json', 'tsconfig.build.json', 'LICENSE', 'CHANGELOG.md',
@@ -40,9 +40,8 @@ function applicationSource(root) {
 }
 
 function contract(root) {
-  const directory = path.join(root, 'python-backend');
-  const files = Object.fromEntries(fs.readdirSync(directory).filter(name => /^[^.].*\.(py|spec|txt)$/.test(name)).sort()
-    .map(name => [`python-backend/${name}`, sha256(fs.readFileSync(path.join(directory, name)))]));
+  const files = Object.fromEntries(backendFiles(root)
+    .map(name => [name, sha256(fs.readFileSync(path.join(root, name)))]));
   files['scripts/release-upstream.json'] = sha256(fs.readFileSync(path.join(root, 'scripts/release-upstream.json')));
   return { protocol: 1, appVersion: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version,
     sourceSha256: sha256(JSON.stringify(files)) };

@@ -11,6 +11,8 @@ import subprocess
 import sys
 from typing import Any
 
+from source_inventory import backend_files
+
 
 def checked_tesseract_version(executable: Path) -> str:
     result = subprocess.run([str(executable), "--version"], capture_output=True, text=True, check=True, timeout=20)
@@ -22,13 +24,12 @@ def checked_tesseract_version(executable: Path) -> str:
 
 
 def source_contract() -> dict[str, Any]:
-    directory = Path(__file__).resolve().parent
-    files = {"python-backend/" + item.name: hashlib.sha256(item.read_bytes()).hexdigest()
-             for item in sorted(directory.iterdir())
-             if not item.name.startswith(".") and item.suffix in (".py", ".spec", ".txt")}
-    upstream = directory.parent / "scripts/release-upstream.json"
+    root = Path(__file__).absolute().parent.parent
+    files = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+             for name in backend_files(root)}
+    upstream = root / "scripts/release-upstream.json"
     files["scripts/release-upstream.json"] = hashlib.sha256(upstream.read_bytes()).hexdigest()
-    version = json.loads((directory.parent / "package.json").read_text(encoding="utf-8"))["version"]
+    version = json.loads((root / "package.json").read_text(encoding="utf-8"))["version"]
     return {"protocol": 1, "appVersion": version,
             "sourceSha256": hashlib.sha256(json.dumps(files, separators=(",", ":")).encode()).hexdigest()}
 
