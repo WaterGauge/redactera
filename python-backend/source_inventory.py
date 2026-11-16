@@ -12,6 +12,9 @@ _ROOT_EXCLUDED = frozenset({"tests", "build", "dist", "coverage", "htmlcov", "ve
 _PORTABLE_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 _WINDOWS_DEVICE = re.compile(r"(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])", re.IGNORECASE)
 
+# FILE_ATTRIBUTE_REPARSE_POINT (Win32); the stat type stub exposes it only on Windows.
+_WINDOWS_REPARSE_POINT = 0x400
+
 
 def _excluded(name: str, at_root: bool) -> bool:
     folded = name.lower()
@@ -21,7 +24,7 @@ def _excluded(name: str, at_root: bool) -> bool:
 
 def _regular_info(path: Path) -> os.stat_result:
     info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & _WINDOWS_REPARSE_POINT:
         raise RuntimeError("Linked backend source is not supported")
     return info
 

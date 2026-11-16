@@ -170,3 +170,14 @@ def test_analysis_rejects_excluded_project_code_but_allows_selected_environment(
     for unexpected in (excluded, build_only, other):
         with pytest.raises(RuntimeError, match="Unlisted backend modules"):
             inventory.verify_runtime_sources(source, [*analyzed, str(unexpected)])
+
+
+def test_windows_reparse_attribute_rejected_on_all_hosts(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    target = tmp_path / "linked.py"
+    original = Path.lstat
+    monkeypatch.setattr(Path, "lstat", lambda self, *args, **kwargs: SimpleNamespace(
+        st_mode=0o100644, st_file_attributes=0x400) if self == target else original(self, *args, **kwargs))
+    with pytest.raises(RuntimeError, match="Linked backend source"):
+        inventory._regular_info(target)
