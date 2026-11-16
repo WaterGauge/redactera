@@ -333,7 +333,7 @@ describe('registerIpcHandlers default update service', () => {
       latestVersion: '1.2.1',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      updateConstants.GITHUB_RELEASES_API_URL,
+      `${updateConstants.GITHUB_RELEASES_API_URL}?per_page=100&page=1`,
       expect.objectContaining({
         headers: expect.objectContaining({ 'User-Agent': 'PDF-Desensitization' }),
       })

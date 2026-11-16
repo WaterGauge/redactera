@@ -8,6 +8,7 @@ import { isProcessingStage, type ProcessingProgress } from '../types/processing'
 import { diagnosticErrorKind } from './diagnostics';
 import { backendStartupFailure } from '../utils/backendStartupFailure';
 import { BACKEND_CONTRACT, type BackendContract } from './backendContract';
+import { BackendFrames, type BackendFrameLimits } from './backendFrames';
 
 const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
 const PYTHON_RESTART_BASE_DELAY_MS = 1000;
@@ -36,6 +37,7 @@ interface PythonProcessManagerDependencies {
   requestTimeoutMs?: number;
   expectedContract?: BackendContract;
   startupTimeoutMs?: number;
+  responseLimits?: BackendFrameLimits;
 }
 
 interface WorkerState {
@@ -49,6 +51,7 @@ interface WorkerState {
   retiring: boolean;
   stopPromise?: Promise<{ confirmed: boolean }>;
   ready: boolean;
+  frames: BackendFrames;
   readinessTimer?: NodeJS.Timeout;
   writeWhenReady?: () => void;
 }
@@ -117,11 +120,14 @@ export function createPythonProcessManager({
   requestTimeoutMs = REQUEST_TIMEOUT_MS,
   expectedContract = BACKEND_CONTRACT,
   startupTimeoutMs = 60000,
+  responseLimits,
 }: PythonProcessManagerDependencies): PythonProcessManager {
   if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0 || requestTimeoutMs > REQUEST_TIMEOUT_MS) {
     throw new Error('Invalid request timeout');
   }
   if (!Number.isSafeInteger(startupTimeoutMs) || startupTimeoutMs <= 0 || startupTimeoutMs > 120000) throw new Error('Invalid backend startup timeout');
+  // Validate injected test limits before any worker is spawned.
+  new BackendFrames(responseLimits);
   let pythonProcess: childProcess.ChildProcess | null = null;
   let restartAttempts = 0;
   let restartTimer: NodeJS.Timeout | null = null;
@@ -236,9 +242,8 @@ export function createPythonProcessManager({
     let closeResolve!: () => void;
     const state: WorkerState = { child: spawnedProcess, closed: false, exited: false, exitCode: null,
       closePromise: new Promise<void>(resolve => { closeResolve = resolve; }), launch,
-      generation: `backend_${++generationCounter}_${Date.now()}`, retiring: false, ready: false };
+      generation: `backend_${++generationCounter}_${Date.now()}`, retiring: false, ready: false, frames: new BackendFrames(responseLimits) };
     current = state;
-    let stdoutBuffer = '';
     clearRestartTimer();
     const startTime = Date.now();
     let crashHandled = false;
@@ -290,89 +295,106 @@ export function createPythonProcessManager({
 
     logger.log(`Python process spawned with PID: ${spawnedProcess.pid}`);
 
-    spawnedProcess.stdout?.on('data', (data: Buffer) => {
-      if (current !== state || state.retiring) return;
-      stdoutBuffer += data.toString();
-      logger.log(`[Python stdout] bytes=${data.length}`, 'DEBUG');
+    const handleFrame = (line: string): void => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return;
+      }
 
-      const lines = stdoutBuffer.split('\n');
-      stdoutBuffer = lines.pop() ?? '';
+      try {
+        const response = JSON.parse(trimmed) as {
+          type?: string;
+          protocol?: number; appVersion?: string; sourceSha256?: string;
+          generation?: string;
+          requestId?: string;
+          success?: boolean;
+          data?: unknown;
+          error?: string;
+          stage?: unknown; message?: unknown; elapsedMs?: unknown; completed?: unknown; total?: unknown;
+        };
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          continue;
+        if (response?.type === 'ready') {
+          if (state.ready) return;
+          if (response.protocol !== expectedContract.protocol || response.appVersion !== expectedContract.appVersion ||
+              typeof response.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(response.sourceSha256) ||
+              (expectedContract.sourceSha256 && response.sourceSha256 !== expectedContract.sourceSha256)) {
+            failReadiness('后端与应用版本不一致，请重新构建或安装完整应用');
+            return;
+          }
+          state.ready = true;
+          clearTimeoutImpl(state.readinessTimer);
+          logger.log(`Python backend ready; elapsedMs=${Math.max(0, Date.now() - startTime)}`);
+          const write = state.writeWhenReady; state.writeWhenReady = undefined; write?.();
+          return;
+        }
+        if (!state.ready || !response || typeof response !== 'object' || !response.requestId ||
+            (response.generation !== undefined && response.generation !== state.generation)) {
+          return;
         }
 
-        try {
-          const response = JSON.parse(trimmed) as {
-            type?: string;
-            protocol?: number; appVersion?: string; sourceSha256?: string;
-            generation?: string;
-            requestId?: string;
-            success?: boolean;
-            data?: unknown;
-            error?: string;
-            stage?: unknown; message?: unknown; elapsedMs?: unknown; completed?: unknown; total?: unknown;
-          };
+        const pending = pendingRequests.get(response.requestId);
+        if (!pending || pending.state !== state) {
+          return;
+        }
+        if (Date.now() >= pending.deadlineMs) {
+          void retire(new Error(`Request timeout after ${requestTimeoutMs}ms`));
+          return;
+        }
 
-          if (response?.type === 'ready') {
-            if (state.ready) continue;
-            if (response.protocol !== expectedContract.protocol || response.appVersion !== expectedContract.appVersion ||
-                typeof response.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(response.sourceSha256) ||
-                (expectedContract.sourceSha256 && response.sourceSha256 !== expectedContract.sourceSha256)) {
-              failReadiness('后端与应用版本不一致，请重新构建或安装完整应用');
-              continue;
-            }
-            state.ready = true;
-            clearTimeoutImpl(state.readinessTimer);
-            logger.log(`Python backend ready; elapsedMs=${Math.max(0, Date.now() - startTime)}`);
-            const write = state.writeWhenReady; state.writeWhenReady = undefined; write?.();
-            continue;
+        if (response.type === 'progress') {
+          if (response.generation !== state.generation || typeof response.message !== 'string' ||
+              response.message.length > 1000 || !isProcessingStage(response.stage) ||
+              typeof response.elapsedMs !== 'number' || !Number.isFinite(response.elapsedMs) || response.elapsedMs < 0) return;
+          const progress: ProcessingProgress = { stage: response.stage, message: response.message, elapsedMs: response.elapsedMs };
+          if (response.completed !== undefined || response.total !== undefined) {
+            if (typeof response.completed !== 'number' || typeof response.total !== 'number' ||
+                !Number.isSafeInteger(response.completed) || !Number.isSafeInteger(response.total) ||
+                response.completed < 0 || response.total <= 0 || response.completed > response.total) return;
+            progress.completed = response.completed; progress.total = response.total;
           }
-          if (!state.ready || !response || typeof response !== 'object' || !response.requestId ||
-              (response.generation !== undefined && response.generation !== state.generation)) {
-            continue;
-          }
+          try { pending.onProgress?.(progress); }
+          catch (error) { logger.log(`Progress listener failed: ${diagnosticErrorKind(error)}`, 'WARN'); }
+          return;
+        }
+        // Untyped boolean terminals remain compatible with an older backend.
+        if ((response.type !== undefined && response.type !== 'result') || typeof response.success !== 'boolean') return;
+        pendingRequests.delete(response.requestId);
+        clearTimeoutImpl(pending.timeoutId);
+        logger.log(`Python request ${response.requestId} ${response.success ? 'succeeded' : 'failed'}; elapsedMs=${Math.max(0, Date.now() - pending.deadlineMs + requestTimeoutMs)}`,
+          response.success ? 'INFO' : 'WARN');
 
-          const pending = pendingRequests.get(response.requestId);
-          if (!pending || pending.state !== state) {
-            continue;
-          }
-          if (Date.now() >= pending.deadlineMs) {
-            void retire(new Error(`Request timeout after ${requestTimeoutMs}ms`));
-            continue;
-          }
+        if (response.success) {
+          pending.resolve(response.data);
+        } else {
+          pending.reject(new Error(response.error ?? 'Unknown error'));
+        }
+      } catch (error) {
+        logger.log(`Failed to parse Python response: ${diagnosticErrorKind(error)}`, 'ERROR');
+        if (pendingRequests.size) {
+          void retire(new Error('Backend response has invalid JSON'));
+        }
+      }
+    };
 
-          if (response.type === 'progress') {
-            if (response.generation !== state.generation || typeof response.message !== 'string' ||
-                response.message.length > 1000 || !isProcessingStage(response.stage) ||
-                typeof response.elapsedMs !== 'number' || !Number.isFinite(response.elapsedMs) || response.elapsedMs < 0) continue;
-            const progress: ProcessingProgress = { stage: response.stage, message: response.message, elapsedMs: response.elapsedMs };
-            if (response.completed !== undefined || response.total !== undefined) {
-              if (typeof response.completed !== 'number' || typeof response.total !== 'number' ||
-                  !Number.isSafeInteger(response.completed) || !Number.isSafeInteger(response.total) ||
-                  response.completed < 0 || response.total <= 0 || response.completed > response.total) continue;
-              progress.completed = response.completed; progress.total = response.total;
-            }
-            try { pending.onProgress?.(progress); }
-            catch (error) { logger.log(`Progress listener failed: ${diagnosticErrorKind(error)}`, 'WARN'); }
-            continue;
-          }
-          // Untyped boolean terminals remain compatible with an older backend.
-          if ((response.type !== undefined && response.type !== 'result') || typeof response.success !== 'boolean') continue;
-          pendingRequests.delete(response.requestId);
-          clearTimeoutImpl(pending.timeoutId);
-          logger.log(`Python request ${response.requestId} ${response.success ? 'succeeded' : 'failed'}; elapsedMs=${Math.max(0, Date.now() - pending.deadlineMs + requestTimeoutMs)}`,
-            response.success ? 'INFO' : 'WARN');
-
-          if (response.success) {
-            pending.resolve(response.data);
-          } else {
-            pending.reject(new Error(response.error ?? 'Unknown error'));
-          }
-        } catch (error) {
-          logger.log(`Failed to parse Python response: ${diagnosticErrorKind(error)}`, 'ERROR');
+    spawnedProcess.stdout?.on('data', (data: Buffer) => {
+      if (current !== state || state.retiring || state.exited) return;
+      logger.log(`[Python stdout] bytes=${data.length}`, 'DEBUG');
+      try {
+        state.frames.feed(data, line => {
+          if (current !== state || state.retiring || state.exited) return false;
+          handleFrame(line);
+          return current === state && !state.retiring && !state.exited;
+        });
+      } catch (error) {
+        // A framing violation invalidates this generation, not merely one line.
+        // Never log the offending data or allow a following terminal to succeed.
+        logger.log(`Python response framing failed: ${diagnosticErrorKind(error)}`, 'ERROR');
+        if (!state.ready) {
+          failReadiness('后端启动通信异常，请重新启动应用');
+        } else {
+          // Idle unsolicited faults cannot trigger an unlimited restart loop.
+          if (!pendingRequests.size) incompatible = true;
+          void retire(error instanceof Error ? error : new Error('Backend response framing failed'));
         }
       }
     });
@@ -389,6 +411,7 @@ export function createPythonProcessManager({
 
     spawnedProcess.on('exit', (code) => {
       state.exited = true;
+      state.frames.clear();
       logger.log(`Python process exited with code ${code}`);
       // A missing/incompatible loader dependency cannot recover through retries.
       // Preserve its fixed message for requests after the initial window event.
@@ -401,6 +424,7 @@ export function createPythonProcessManager({
     spawnedProcess.on('close', (code) => {
       clearTimeoutImpl(state.readinessTimer);
       state.closed = true;
+      state.frames.clear();
       state.exitCode = code;
       closeResolve();
       if (pythonProcess === spawnedProcess) pythonProcess = null;
@@ -412,6 +436,7 @@ export function createPythonProcessManager({
   const stopGeneration = (state: WorkerState): Promise<{ confirmed: boolean }> => {
     clearTimeoutImpl(state.readinessTimer);
     state.writeWhenReady = undefined;
+    state.frames.clear();
     if (state.stopPromise) return state.stopPromise;
     if (state.closed) return Promise.resolve({ confirmed: state.exitCode === 0 });
     const waitClosed = (duration: number): Promise<boolean> => new Promise(resolve => {
@@ -526,6 +551,7 @@ export function createPythonProcessManager({
         if (!pendingRequests.has(requestId) || current !== state || state.retiring || state.closed || state.exited) return;
         if (Date.now() >= deadlineMs) { void retire(new Error(`Request timeout after ${requestTimeoutMs}ms`)); return; }
         try {
+          state.frames.beginResponse();
           if (process.platform === 'win32') {
             state.child.stdin?.write(Buffer.from(message, 'utf-8'), onWrite);
           } else {

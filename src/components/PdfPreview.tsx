@@ -10,7 +10,9 @@ function loadWorkerSource(): Promise<string> {
     .catch(error => { workerSource = undefined; throw error; });
 }
 const ZOOMS = ['fit', '0.5', '0.75', '1', '1.25', '1.5', '2'] as const;
-const PREVIEW_ERROR = '无法预览 PDF。请重新加载；若仍失败，请检查文件是否损坏、加密或无权读取。';
+const MAX_PAGE_TEXT_UNITS = 1024 * 1024; // optional auxiliary text, not a PDF processing limit
+const PAGE_TEXT_LIMIT = '本页文字量超过辅助阅读容量，页面图像仍可查看。';
+const PREVIEW_ERROR = '无法预览 PDF。请重新加载；若仍失败，请检查文件是否过大、损坏、加密或无权读取。';
 
 export function PdfPreview({ filePath, location, disabled, region, onPageRendered, onPreviewError }: {
   filePath: string;
@@ -29,6 +31,7 @@ export function PdfPreview({ filePath, location, disabled, region, onPageRendere
   const [pageNotice, setPageNotice] = useState('');
   const [rendering, setRendering] = useState(true);
   const [text, setText] = useState('');
+  const [textNotice, setTextNotice] = useState('');
   const [painted, setPainted] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: string; width: number; attempt: number; viewWidth: number; viewHeight: number } | null>(null);
   const callbacks = useRef({ onPageRendered, onPreviewError });
   callbacks.current = { onPageRendered, onPreviewError };
@@ -50,7 +53,7 @@ export function PdfPreview({ filePath, location, disabled, region, onPageRendere
     let port: Worker | undefined;
     let workerUrl: string | undefined;
     let startupTimer: ReturnType<typeof setTimeout> | undefined;
-    setPdf(null); setError(''); setText(''); setPage(1); setRendering(true); setPainted(null);
+    setPdf(null); setError(''); setText(''); setTextNotice(''); setPage(1); setRendering(true); setPainted(null);
     void (async () => {
       // Main asynchronously reads through the existing exact-file gate. Only
       // this trusted main document can use the bridge; no cross-origin read
@@ -104,27 +107,51 @@ export function PdfPreview({ filePath, location, disabled, region, onPageRendere
     if (!pdf || width <= 0 || !canvas.current) return;
     let stopped = false;
     let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | undefined;
+    let textReader: ReadableStreamDefaultReader<{ items: Array<{ str?: string; hasEOL?: boolean }> }> | undefined;
     const target = canvas.current;
-    setRendering(true); setText(''); setError(''); setPainted(null);
+    setRendering(true); setText(''); setTextNotice(''); setError(''); setPainted(null);
     void (async () => {
       const source = await pdf.getPage(page);
       if (stopped) return;
       const natural = source.getViewport({ scale: 1 });
+      if (!Number.isFinite(natural.width) || !Number.isFinite(natural.height) || natural.width <= 0 || natural.height <= 0) throw new Error('Invalid preview geometry');
       const scale = zoom === 'fit' ? Math.max(0.01, (width - 32) / natural.width) : Number(zoom);
       const view = source.getViewport({ scale });
+      if (!Number.isFinite(view.width) || !Number.isFinite(view.height) || view.width <= 0 || view.height <= 0) throw new Error('Invalid preview geometry');
       // Bound the backing bitmap, while preserving the visible aspect ratio.
       const ratio = Math.min(window.devicePixelRatio || 1, 8192 / view.width, 8192 / view.height, Math.sqrt(16_777_216 / (view.width * view.height)));
       target.width = Math.max(1, Math.floor(view.width * ratio)); target.height = Math.max(1, Math.floor(view.height * ratio));
       target.style.width = `${view.width}px`; target.style.height = `${view.height}px`;
       renderTask = source.render({ canvas: target, viewport: view, transform: [ratio, 0, 0, ratio, 0, 0] });
       await renderTask.promise;
-      const content = await source.getTextContent();
       if (stopped) return;
-      setText(content.items.map(item => 'str' in item ? item.str + (item.hasEOL ? '\n' : ' ') : '').join(''));
+      // Stream optional reading text instead of collecting an unbounded page
+      // object graph. Do not show a partial string as if it were the full page.
+      const reader = source.streamTextContent().getReader() as ReadableStreamDefaultReader<{ items: Array<{ str?: string; hasEOL?: boolean }> }>;
+      textReader = reader;
+      let pageText = '', overLimit = false;
+      try {
+        while (!stopped) {
+          const { done, value } = await reader.read();
+          if (done || stopped) break;
+          for (const item of value.items) {
+            if (typeof item.str !== 'string') continue;
+            if (item.str.length + 1 > MAX_PAGE_TEXT_UNITS - pageText.length) { overLimit = true; break; }
+            pageText += item.str + (item.hasEOL ? '\n' : ' ');
+          }
+          if (overLimit) { await reader.cancel(); break; }
+        }
+      } finally {
+        textReader = undefined;
+        reader.releaseLock();
+      }
+      if (stopped) return;
+      if (overLimit) setTextNotice(PAGE_TEXT_LIMIT);
+      else setText(pageText);
       setPainted({ pdf, page, zoom, width, attempt, viewWidth: view.width, viewHeight: view.height });
       setRendering(false);
     })().catch(() => { if (!stopped) { setError(PREVIEW_ERROR); setRendering(false); } });
-    return () => { stopped = true; renderTask?.cancel(); };
+    return () => { stopped = true; renderTask?.cancel(); void textReader?.cancel().catch(() => undefined); };
   }, [pdf, page, zoom, width, attempt]);
 
   const ready = !error && !rendering && painted?.pdf === pdf && painted?.page === page &&
@@ -172,6 +199,7 @@ export function PdfPreview({ filePath, location, disabled, region, onPageRendere
         </svg>}
       </div>
     </div>
+    {ready && textNotice && <p role="status">{textNotice}</p>}
     {text && !error && <details className="pdf-page-text"><summary>本页文字</summary><p>文字顺序可能与页面不同，版式以页面为准。</p><pre>{text}</pre></details>}
   </section>;
 }

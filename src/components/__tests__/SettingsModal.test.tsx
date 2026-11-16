@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
+import { DEFAULT_SETTINGS } from '../../types/settings';
 
 // Mock electron API
 const mockElectronAPI = {
@@ -46,6 +47,34 @@ const mockElectronAPI = {
 describe('SettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it.each([0, 0.2, 0.731, 1])('preserves historical fuzzy threshold %s when other settings change', async threshold => {
+    mockElectronAPI.getSettings.mockResolvedValueOnce({ ...DEFAULT_SETTINGS,
+      fuzzy_match_enabled: true, fuzzy_match_threshold: threshold });
+    render(<SettingsModal onClose={vi.fn()} />);
+    const slider = await screen.findByLabelText('最低相似度');
+    expect(Number((slider as HTMLInputElement).value)).toBe(threshold);
+    fireEvent.change(screen.getByLabelText('遮盖范围'), { target: { value: '3' } });
+    await act(async () => { fireEvent.click(screen.getByText('保存')); });
+    await vi.waitFor(() => expect(mockElectronAPI.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      fuzzy_match_threshold: threshold,
+    }), false));
+  });
+
+  it('returns to the normal threshold steps only on deliberate adjustment', async () => {
+    mockElectronAPI.getSettings.mockResolvedValueOnce({ ...DEFAULT_SETTINGS,
+      fuzzy_match_enabled: true, fuzzy_match_threshold: 0.2 });
+    render(<SettingsModal onClose={vi.fn()} />);
+    const slider = await screen.findByLabelText('最低相似度');
+    expect(screen.getByText(/已保留历史相似度/)).toBeInTheDocument();
+    fireEvent.change(slider, { target: { value: '0.83' } });
+    expect(Number((slider as HTMLInputElement).value)).toBe(0.85);
+    expect(screen.queryByText(/已保留历史相似度/)).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText('保存')); });
+    await vi.waitFor(() => expect(mockElectronAPI.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      fuzzy_match_threshold: 0.85,
+    }), false));
   });
 
   it('应该渲染设置对话框', async () => {

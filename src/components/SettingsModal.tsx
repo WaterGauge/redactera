@@ -56,6 +56,9 @@ function normalizeUpdateResult(rawResult: unknown, currentVersion: string): Norm
   }
 
   const result = rawResult as Record<string, unknown>;
+  if (result.error && typeof result.error === 'object' && (result.error as Record<string, unknown>).code === 'UPDATE_CHECK_RATE_LIMITED') {
+    throw new Error('Update check rate limited');
+  }
   if ((result.error !== undefined && result.error !== null) || (result.success !== undefined && result.success !== true)) {
     throw new Error('Update check failed');
   }
@@ -190,6 +193,10 @@ export function SettingsModal({ onClose, motionPreference = 'system', onMotionPr
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
+  // Old settings accepted the whole [0, 1] range and arbitrary finite
+  // fractions. Show the actual stored value until the user moves the slider.
+  const historicalThreshold = settings.fuzzy_match_threshold < 0.5 ||
+    Math.abs(settings.fuzzy_match_threshold * 20 - Math.round(settings.fuzzy_match_threshold * 20)) > 1e-8;
   const selectedScopeIndex = findScopeIndex(settings.redaction_scope);
   const selectedScope = REDACTION_SCOPE_OPTIONS[selectedScopeIndex] ?? REDACTION_SCOPE_OPTIONS[1];
   const displayCurrentVersion = currentVersion === '加载中...' || currentVersion === '未知'
@@ -219,8 +226,10 @@ export function SettingsModal({ onClose, motionPreference = 'system', onMotionPr
       } else {
         setUpdateMessage(`已是最新版本（${normalized.currentVersion}）`);
       }
-    } catch {
-      setUpdateMessage('检查更新失败，请检查网络后重试');
+    } catch (error) {
+      setUpdateMessage(error instanceof Error && error.message === 'Update check rate limited'
+        ? '检查更新失败：GitHub 请求已达限制，请稍后重试或打开下载页面。'
+        : '检查更新失败，请检查网络后重试');
     } finally {
       setCheckingUpdates(false);
     }
@@ -339,16 +348,17 @@ export function SettingsModal({ onClose, motionPreference = 'system', onMotionPr
                 <div className="form-inline">
                   <input id="fuzzy-threshold"
                     type="range"
-                    min="0.5"
+                    min={historicalThreshold ? Math.min(0.5, settings.fuzzy_match_threshold) : 0.5}
                     max="1.0"
-                    step="0.05"
+                    step={historicalThreshold ? "any" : "0.05"}
                     aria-valuetext={`${Math.round(settings.fuzzy_match_threshold * 100)}%`}
                     value={settings.fuzzy_match_threshold}
-                    onChange={(e) => set('fuzzy_match_threshold', parseFloat(e.target.value))}
+                    onChange={(e) => set('fuzzy_match_threshold', Math.max(0.5, Math.min(1, Math.round(Number(e.target.value) * 20) / 20)))}
                     style={{ flex: 1 }}
                   />
                   <span className="threshold-value">{(settings.fuzzy_match_threshold * 100).toFixed(0)}%</span>
                 </div>
+                {historicalThreshold && <p className="form-help">已保留历史相似度；主动调整滑块时采用 50%–100% 的常用范围。</p>}
               </div>
             )}
             <div className="form-field">

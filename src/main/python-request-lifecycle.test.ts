@@ -11,7 +11,7 @@ function child(pid: number) {
   });
   return value;
 }
-function harness() {
+function harness(responseLimits?: { frameBytes: number; responseBytes: number }) {
   const children = [child(41001), child(41002), child(41003)];
   const spawn = vi.fn().mockImplementation(() => children[spawn.mock.calls.length - 1]);
   const terminated = vi.fn(async () => true), confirmed = vi.fn(async () => true);
@@ -19,7 +19,7 @@ function harness() {
     app: { isPackaged: false, getAppPath: () => '/app', getPath: () => '/tmp' },
     logger: { log: vi.fn() }, readSettings: () => DEFAULT_SETTINGS,
     childProcessImpl: { spawn } as never, terminateTree: terminated, confirmTreeStopped: confirmed,
-    requestTimeoutMs: 1000,
+    requestTimeoutMs: 1000, responseLimits,
   });
   manager.start();
   const message = (index = 0) => JSON.parse(String(children[index].stdin.write.mock.calls[0]?.[0]));
@@ -136,5 +136,48 @@ describe('CR-016 request ownership, progress and confirmed cancellation', () => 
     const h = harness(), work = h.send(); h.emit({ ...h.message(), type: 'result', success: true, data: 'done' });
     await work; await expect(h.manager.cancel()).resolves.toEqual({ confirmed: true });
     expect(h.children[0].stdin.end).not.toHaveBeenCalled(); expect(h.spawn).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('backend IPC byte limits and recovery', () => {
+  const limits = { frameBytes: 512, responseBytes: 1024 };
+  it('preserves split multibyte terminal data and accepts the following request', async () => {
+    const h = harness(limits), work = h.send();
+    const payload = Buffer.from(JSON.stringify({ ...h.message(), type: 'result', success: true, data: '中文😀' }) + '\n');
+    for (const byte of payload) h.children[0].stdout.emit('data', Buffer.from([byte]));
+    await expect(work).resolves.toBe('中文😀');
+    const next = h.send();
+    const wire = JSON.parse(String(h.children[0].stdin.write.mock.calls[1]?.[0]));
+    h.emit({ ...wire, type: 'result', success: true, data: 'next' });
+    await expect(next).resolves.toBe('next');
+  });
+  it.each(['partial', 'complete', 'aggregate', 'invalid UTF-8', 'invalid JSON'])('retires on %s violation and rejects a following same-chunk terminal', async kind => {
+    const h = harness(limits), work = h.send(), settled = vi.fn(); work.then(settled, settled);
+    const terminal = Buffer.from(JSON.stringify({ ...h.message(), type: 'result', success: true, data: 'must not succeed' }) + '\n');
+    if (kind === 'partial') {
+      h.children[0].stdout.emit('data', Buffer.alloc(512, 97));
+      h.children[0].stdout.emit('data', Buffer.from('a'));
+    } else if (kind === 'aggregate') {
+      h.children[0].stdout.emit('data', Buffer.from('\n'.repeat(1024)));
+      h.children[0].stdout.emit('data', terminal);
+    } else {
+      h.children[0].stdout.emit('data', Buffer.concat([kind === 'complete' ? Buffer.from('a'.repeat(513) + '\n') : kind === 'invalid JSON' ? Buffer.from('{\n') : Buffer.from([0xff, 0x0a]), terminal]));
+    }
+    expect(h.children[0].stdin.end).toHaveBeenCalledOnce();
+    await Promise.resolve(); expect(settled).not.toHaveBeenCalled();
+    h.children[0].stdout.emit('data', terminal);
+    await expect(h.manager.send('upload', {})).rejects.toThrow(/stopping/i);
+    h.close(); await expect(work).rejects.toThrow(kind === 'invalid UTF-8' ? /invalid UTF-8/ : kind === 'invalid JSON' ? /invalid JSON/ : /IPC byte limit/);
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    const next = h.send(); h.emit({ ...h.message(1), type: 'result', success: true, data: 'recovered' }, 1);
+    await expect(next).resolves.toBe('recovered');
+  });
+  it('stays unavailable if an over-limit generation cannot be confirmed stopped', async () => {
+    const h = harness(limits); h.terminated.mockResolvedValue(false);
+    const work = h.send(); h.children[0].stdout.emit('data', Buffer.alloc(513, 97));
+    await vi.advanceTimersByTimeAsync(7000);
+    await expect(work).rejects.toThrow(/confirm/i); expect(h.spawn).toHaveBeenCalledOnce();
+    await expect(h.manager.send('upload', {})).rejects.toThrow(/unavailable|stopping/i);
   });
 });

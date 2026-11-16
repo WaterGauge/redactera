@@ -13,7 +13,9 @@ function deferred<T>() {
 const paint = () => ({
   getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
   render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
-  getTextContent: vi.fn().mockResolvedValue({ items: [{ str: 'CURRENT FILE TEXT', hasEOL: true }] }),
+  streamTextContent: vi.fn(() => new ReadableStream({ start(controller) {
+    controller.enqueue({ items: [{ str: 'CURRENT FILE TEXT', hasEOL: true }] }); controller.close();
+  } })),
 });
 let source: ReturnType<typeof paint>;
 let pdf: { numPages: number; getPage: ReturnType<typeof vi.fn> };
@@ -88,7 +90,7 @@ it('destroys old loads and cannot show late original text after switching to a r
   const view = mount(); await waitFor(() => expect(library.getDocument).toHaveBeenCalledTimes(1));
   view.rerender(<PdfPreview filePath="/fixture/result.pdf" location={null} disabled={false} />);
   await loaded(); expect(destroy).toHaveBeenCalled();
-  const stale = { numPages: 50, getPage: vi.fn().mockResolvedValue({ ...paint(), getTextContent: async () => ({ items: [{ str: 'OLD ORIGINAL SECRET' }] }) }) };
+  const stale = { numPages: 50, getPage: vi.fn().mockResolvedValue({ ...paint(), streamTextContent: () => new ReadableStream({ start(controller) { controller.enqueue({ items: [{ str: 'OLD ORIGINAL SECRET' }] }); controller.close(); } }) }) };
   await act(async () => old.resolve(stale));
   expect(stale.getPage).not.toHaveBeenCalled(); expect(document.body).not.toHaveTextContent('OLD ORIGINAL SECRET');
 });
@@ -134,4 +136,31 @@ it('does not parse bytes from a superseded asynchronous bridge read', async () =
   await loaded(); expect(library.getDocument).toHaveBeenCalledTimes(1);
   await act(async () => old.resolve(new Uint8Array([1, 2, 3])));
   expect(library.getDocument).toHaveBeenCalledTimes(1);
+});
+
+
+it('bounds auxiliary text and still reports the successfully painted page', async () => {
+  const cancel = vi.fn();
+  source.streamTextContent.mockReturnValueOnce(new ReadableStream({ start(controller) {
+    controller.enqueue({ items: [{ str: 'PRIVATE PARTIAL' }, { str: 'x'.repeat(1024 * 1024) }] });
+  }, cancel }));
+  const rendered = vi.fn(), failed = vi.fn();
+  render(<PdfPreview filePath="/result.pdf" location={null} disabled={false} onPageRendered={rendered} onPreviewError={failed} />);
+  await screen.findByText(/本页文字量超过辅助阅读容量/);
+  expect(cancel).toHaveBeenCalledOnce(); expect(rendered).toHaveBeenCalledWith(1, 2, undefined);
+  expect(failed).not.toHaveBeenCalled(); expect(document.body).not.toHaveTextContent('PRIVATE PARTIAL');
+});
+
+it('cancels an obsolete auxiliary stream on page change', async () => {
+  const cancel = vi.fn();
+  source.streamTextContent.mockReturnValueOnce(new ReadableStream({ cancel }));
+  mount(); await waitFor(() => expect(source.streamTextContent).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  await loaded(); expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('rejects nonfinite preview geometry before canvas rendering', async () => {
+  source.getViewport = () => ({ width: Infinity, height: 800 });
+  mount(); await screen.findByText(/无法预览 PDF/);
+  expect(source.render).not.toHaveBeenCalled();
 });

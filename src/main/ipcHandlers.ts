@@ -14,6 +14,48 @@ const GITHUB_REPO = 'WaterGauge/redactera';
 const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
 const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
 const UPDATE_TIMEOUT_MS = 10000;
+const UPDATE_PAGE_SIZE = 100;
+const UPDATE_MAX_PAGES = 20;
+const UPDATE_RATE_LIMIT_FALLBACK_MS = 60000;
+
+class UpdateQueryError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
+
+function releasePageUrl(page: number): string {
+  return `${GITHUB_RELEASES_API_URL}?per_page=${UPDATE_PAGE_SIZE}&page=${page}`;
+}
+
+// The API may use a numeric repository path in Link. Never fetch a supplied URL.
+function hasNextReleasePage(link: string | null, page: number): boolean {
+  if (!link) return false;
+  let next = false;
+  for (const part of link.split(/,\s*(?=<)/)) {
+    const match = part.trim().match(/^<([^<>]+)>;\s*rel="(next|prev|first|last)"$/);
+    if (!match) throw new Error('GitHub Releases API returned invalid pagination');
+    if (match[2] !== 'next') continue;
+    const url = new URL(match[1]);
+    const path = url.pathname.toLowerCase();
+    if (next || url.origin !== 'https://api.github.com' || url.username || url.password || url.hash ||
+        (path !== `/repos/${GITHUB_REPO.toLowerCase()}/releases` && !/^\/repositories\/\d+\/releases$/.test(path)) ||
+        url.searchParams.get('page') !== String(page + 1) ||
+        (url.searchParams.has('per_page') && url.searchParams.get('per_page') !== String(UPDATE_PAGE_SIZE))) {
+      throw new Error('GitHub Releases API returned invalid pagination');
+    }
+    next = true;
+  }
+  return next;
+}
+
+function rateLimitUntil(response: Response, now: number): number {
+  const retry = response.headers?.get('retry-after');
+  const reset = response.headers?.get('x-ratelimit-remaining') === '0'
+    ? response.headers?.get('x-ratelimit-reset') : null;
+  const retryMs = retry && /^\d+$/.test(retry) ? now + Number(retry) * 1000 : 0;
+  const resetMs = reset && /^\d+$/.test(reset) ? Number(reset) * 1000 : 0;
+  const until = Math.max(Number.isSafeInteger(retryMs) ? retryMs : 0, Number.isSafeInteger(resetMs) ? resetMs : 0);
+  return until > now ? until : now + UPDATE_RATE_LIMIT_FALLBACK_MS;
+}
 
 interface LoggerLike {
   log(message: string, level?: 'INFO' | 'ERROR' | 'WARN' | 'DEBUG'): void;
@@ -182,6 +224,9 @@ function createDefaultUpdateService(dependencies: {
   fetchImpl?: typeof fetch;
 }): UpdateService {
   const fetchImpl = dependencies.fetchImpl ?? fetch;
+  let limitedUntil = 0;
+  let checking = false;
+  const rateLimited = () => new UpdateQueryError('UPDATE_CHECK_RATE_LIMITED', 'GitHub Releases API rate limited');
 
   return {
     getChangelog(currentVersion: string): ChangelogEntry[] {
@@ -197,47 +242,68 @@ function createDefaultUpdateService(dependencies: {
       includePrerelease: boolean;
       timeoutMs: number;
     }): Promise<UpdateCheckResult> {
+      if (Date.now() < limitedUntil) throw rateLimited();
+      if (checking) throw new UpdateQueryError('UPDATE_CHECK_BUSY', 'Update check already running');
+      checking = true;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const response = await fetchImpl(GITHUB_RELEASES_API_URL, {
-          headers: {
-            Accept: 'application/vnd.github+json',
-            'User-Agent': 'PDF-Desensitization',
-          },
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`GitHub Releases API returned ${response.status}`);
-        }
-
-        const data: unknown = await response.json();
-        if (!Array.isArray(data) || data.some(release => {
-          if (!isRecord(release)) return true;
-          const version = release.tag_name ?? release.name;
-          return typeof version !== 'string' || !version.trim() ||
-            (release.draft !== undefined && typeof release.draft !== 'boolean') ||
-            (release.prerelease !== undefined && typeof release.prerelease !== 'boolean');
-        })) {
-          throw new Error('GitHub Releases API returned invalid release data');
-        }
-        const releases = data as ReleaseRecord[];
         const current = parseVersion(currentVersion);
-
-        const candidates = releases
-          .filter((release) => !release.draft)
-          .map((release) => {
+        let newest: { version: string; release: ReleaseRecord; parsed: ParsedVersion } | undefined;
+        for (let page = 1; page <= UPDATE_MAX_PAGES; page++) {
+          controller.signal.throwIfAborted();
+          const response = await fetchImpl(releasePageUrl(page), {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'PDF-Desensitization',
+            },
+            signal: controller.signal,
+            redirect: 'error',
+          });
+          controller.signal.throwIfAborted();
+          const exhausted = response.headers?.get('x-ratelimit-remaining') === '0';
+          if (!response.ok) {
+            let limited = response.status === 429 || (response.status === 403 &&
+              (exhausted || Boolean(response.headers?.get('retry-after'))));
+            if (response.status === 403 && !limited) {
+              try {
+                const errorData: unknown = await response.json();
+                limited = isRecord(errorData) && typeof errorData.message === 'string' && /rate limit/i.test(errorData.message);
+              } catch { /* An unreadable error body remains an HTTP failure. */ }
+              controller.signal.throwIfAborted();
+            }
+            if (limited) {
+              limitedUntil = rateLimitUntil(response, Date.now());
+              throw rateLimited();
+            }
+            throw new Error(`GitHub Releases API returned ${response.status}`);
+          }
+          if (exhausted) limitedUntil = rateLimitUntil(response, Date.now());
+          const data: unknown = await response.json();
+          controller.signal.throwIfAborted();
+          if (!Array.isArray(data) || data.length > UPDATE_PAGE_SIZE || data.some(release => {
+            if (!isRecord(release)) return true;
+            const version = release.tag_name ?? release.name;
+            return typeof version !== 'string' || !version.trim() ||
+              (release.draft !== undefined && typeof release.draft !== 'boolean') ||
+              (release.prerelease !== undefined && typeof release.prerelease !== 'boolean');
+          })) {
+            throw new Error('GitHub Releases API returned invalid release data');
+          }
+          for (const release of data as ReleaseRecord[]) {
+            if (release.draft) continue;
             const version = release.tag_name ?? release.name ?? '';
-            return { version, release, parsed: parseVersion(version) };
-          })
-          .filter((entry) => entry.parsed !== null)
-          .filter((entry) => includePrerelease || (!entry.release.prerelease && !entry.parsed?.prerelease.length))
-          .filter((entry) => current === null || compareVersions(entry.version, current.raw) > 0)
-          .sort((left, right) => compareVersions(right.version, left.version));
-
-        if (candidates.length === 0) {
+            const parsed = parseVersion(version);
+            if (!parsed || (!includePrerelease && (release.prerelease || parsed.prerelease.length)) ||
+                (current && compareVersions(version, current.raw) <= 0)) continue;
+            if (!newest || compareVersions(version, newest.version) > 0) newest = { version, release, parsed };
+          }
+          if (!hasNextReleasePage(response.headers?.get('link') ?? null, page)) break;
+          if (exhausted) throw rateLimited();
+          if (page === UPDATE_MAX_PAGES) throw new Error('GitHub Releases API pagination limit reached');
+        }
+        if (!newest) {
           return {
             updateAvailable: false,
             currentVersion,
@@ -245,7 +311,6 @@ function createDefaultUpdateService(dependencies: {
           };
         }
 
-        const newest = candidates[0];
         return {
           updateAvailable: true,
           currentVersion,
@@ -253,10 +318,11 @@ function createDefaultUpdateService(dependencies: {
           releaseNotes: newest.release.body ?? '',
           publishedAt: newest.release.published_at,
           url: newest.release.html_url,
-          prerelease: Boolean(newest.release.prerelease || newest.parsed?.prerelease.length),
+          prerelease: Boolean(newest.release.prerelease || newest.parsed.prerelease.length),
         };
       } finally {
         clearTimeout(timeoutId);
+        checking = false;
       }
     },
 
@@ -651,7 +717,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
         currentVersion,
         latestVersion: currentVersion,
         error: createStructuredError(
-          error instanceof Error && error.name === 'AbortError'
+          error instanceof UpdateQueryError ? error.code : error instanceof Error && error.name === 'AbortError'
             ? 'UPDATE_CHECK_TIMEOUT'
             : 'UPDATE_CHECK_FAILED',
           error instanceof Error ? error.message : 'Unknown update error'

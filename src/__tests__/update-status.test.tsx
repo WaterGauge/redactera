@@ -40,7 +40,7 @@ const assertFailure = () => {
   expect(screen.getByText('检查更新')).toBeEnabled();
 };
 
-it.each([404, 429, 503])('shows HTTP %s as failure through real Main handlers', async status => {
+it.each([404, 503])('shows HTTP %s as failure through real Main handlers', async status => {
   const h = await mount(http(null, status)); await h.check(); assertFailure();
 });
 it.each([new Error('offline'), Object.assign(new Error('aborted'), { name: 'AbortError' })])(
@@ -56,7 +56,7 @@ it.each([null, [], {}, 'invalid', { updateAvailable: 'false' }, { updateAvailabl
 it('checks the Redactera repository and opens the same Releases page', async () => {
   const h = await mount(http([{ tag_name: 'v2.0.0', draft: false, prerelease: false }]));
   await h.check();
-  expect(h.fetcher).toHaveBeenCalledWith('https://api.github.com/repos/WaterGauge/redactera/releases', expect.anything());
+  expect(h.fetcher).toHaveBeenCalledWith('https://api.github.com/repos/WaterGauge/redactera/releases?per_page=100&page=1', expect.anything());
   expect(screen.getByText('已是最新版本（v2.0.0）')).toBeInTheDocument();
 
   const releasesUrl = 'https://github.com/WaterGauge/redactera/releases';
@@ -89,4 +89,11 @@ it('shows a failed manual-open result from Main', async () => {
   const h = await mount(http([])); h.openExternal.mockRejectedValueOnce(new Error('blocked'));
   await act(async () => { fireEvent.click(screen.getByText('打开下载页面')); });
   expect(screen.getByText('无法打开下载页面，请手动访问下方链接')).toBeInTheDocument();
+});
+
+it('shows rate limiting as failure, not an up-to-date result', async () => {
+  const h = await mount(http(null, 429)); await h.check();
+  expect(screen.getByText('检查更新失败：GitHub 请求已达限制，请稍后重试或打开下载页面。')).toBeInTheDocument();
+  expect(screen.queryByText(/已是最新版本/)).not.toBeInTheDocument();
+  await h.check(); expect(h.fetcher).toHaveBeenCalledOnce();
 });

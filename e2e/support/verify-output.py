@@ -15,21 +15,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "fixtures"))
 from ocr_fixtures import verify_ocr_result
 
 
+def marker_bytes(word):
+    # Synthetic marker checks, not a general arbitrary-PDF sanitization proof.
+    for encoding in ("utf-8", "utf-16-be", "utf-16-le"):
+        value = word.encode(encoding)
+        yield value
+        yield value.hex().encode("ascii")
+        yield value.hex().upper().encode("ascii")
+
+
 def verify_pdf(file, sample, contract):
+    assert file.read_bytes() != sample.read_bytes(), "Export is the original PDF"
+    targets = contract.get("splitTarget", contract["keywords"])
+    markers = tuple({pattern for word in contract.get("objectMarkers", ["SECRET"])
+                     for pattern in marker_bytes(word)})
+    # Check physical bytes as well as the current xref view: an incremental
+    # update can make old content unreachable while leaving its bytes behind.
+    physical = file.read_bytes()
+    assert not any(pattern in physical for pattern in markers), "Sensitive marker remains in PDF file bytes"
+    with fitz.open(sample) as original, fitz.open(file) as document:
+        assert len(document) == len(original) == contract["pageCount"], "Wrong page count"
+        before = [page.get_text() for page in original]
+        after = [page.get_text() for page in document]
+        assert all(any(word in text for text in before) for word in contract["public"]), "Missing source public control"
+        if not contract.get("rasterTargets"):
+            assert all(any(word in text for text in before) for word in targets), "Missing source sensitive control"
+        for source_text, result_text in zip(before, after):
+            for word in contract["public"]:
+                assert result_text.count(word) >= source_text.count(word), "Public control text missing on its original page"
+            assert all(word not in result_text for word in targets), "Sensitive source text remains recoverable"
+        for xref in range(1, document.xref_length()):
+            data = document.xref_object(xref).encode("utf-8")
+            if document.xref_is_stream(xref):
+                data += (document.xref_stream(xref) or b"") + (document.xref_stream_raw(xref) or b"")
+            assert not any(pattern in data for pattern in markers), "Sensitive marker remains in a PDF object"
     if contract.get("rasterTargets"):
         verify_ocr_result(file, sample, contract)
-        assert file.read_bytes() != sample.read_bytes(), "OCR export is the original PDF"
-        return
-    with fitz.open(file) as document:
-        assert len(document) == contract["pageCount"], "Wrong page count"
-        text = "\n".join(page.get_text() for page in document)
-        assert all(word in text for word in contract["public"]), "Public control text missing"
-        targets = contract.get("splitTarget", contract["keywords"])
-        assert all(word not in text for word in targets), "Sensitive source text remains recoverable"
-        for xref in range(1, document.xref_length()):
-            data = document.xref_object(xref).encode("utf-8") + (document.xref_stream(xref) or b"")
-            assert b"SECRET" not in data, "Sensitive marker remains in a PDF object"
-        assert file.read_bytes() != sample.read_bytes(), "Export is the original PDF"
 
 
 def main():

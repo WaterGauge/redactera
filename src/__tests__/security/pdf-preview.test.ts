@@ -93,7 +93,7 @@ describe('authorized PDF preview protocol', () => {
 
 
 describe('trusted asynchronous PDF preview bridge', () => {
-  function setup(pageUrl = 'file:///ui/index.html', actualUrl = pageUrl) {
+  function setup(pageUrl = 'file:///ui/index.html', actualUrl = pageUrl, maxBytes?: number) {
     const validator = createPathValidator();
     const fetchFile = vi.fn(async () => new Response('%PDF-fixture'));
     const state = { closing: false, destroyed: false };
@@ -104,7 +104,7 @@ describe('trusted asynchronous PDF preview bridge', () => {
     registerPdfPreviewReader({
       ipcMain: { handle: (_channel, listener) => { reader = listener; } },
       mainWindowProvider: () => window as unknown as BrowserWindow,
-      pageUrl,
+      pageUrl, maxBytes,
       handler: createPdfPreviewHandler({ pathValidator: validator, fetchFile, isClosing: () => state.closing }),
     });
     const event = { sender: owner, senderFrame: frame };
@@ -159,4 +159,42 @@ describe('trusted asynchronous PDF preview bridge', () => {
     h.fetchFile.mockRejectedValueOnce(new Error('PRIVATE DOCUMENT PATH'));
     await expect(h.read('/tmp/selected.pdf')).rejects.toThrow(/^Preview read rejected$/);
   });
+  it('accepts exact-limit streamed bytes and does not trust an absent length', async () => {
+    const h = setup(undefined, undefined, 8); h.validator.addAllowedPath('/tmp/selected.pdf');
+    h.fetchFile.mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3])); controller.enqueue(new Uint8Array([4, 5, 6, 7, 8])); controller.close();
+    } })));
+    expect(await h.read('/tmp/selected.pdf')).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]));
+  });
+  it.each([undefined, '7', '9', 'invalid'])('rejects oversized streams or lengths (%s), cancels and allows a later read', async length => {
+    const h = setup(undefined, undefined, 8); h.validator.addAllowedPath('/tmp/selected.pdf');
+    const cancel = vi.fn();
+    h.fetchFile.mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new Uint8Array(7)); controller.enqueue(new Uint8Array(2));
+    }, cancel }), { headers: length === undefined ? {} : { 'content-length': length } }));
+    await expect(h.read('/tmp/selected.pdf')).rejects.toThrow('Preview read rejected');
+    expect(cancel).toHaveBeenCalledOnce();
+    h.fetchFile.mockResolvedValueOnce(new Response('good'));
+    expect(new TextDecoder().decode(await h.read('/tmp/selected.pdf'))).toBe('good');
+  });
+  it('rejects truncated declared content and read failure', async () => {
+    const h = setup(undefined, undefined, 8); h.validator.addAllowedPath('/tmp/selected.pdf');
+    h.fetchFile.mockResolvedValueOnce(new Response('short', { headers: { 'content-length': '8' } }));
+    await expect(h.read('/tmp/selected.pdf')).rejects.toThrow('Preview read rejected');
+    h.fetchFile.mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) { controller.error(new Error('PRIVATE')); } })));
+    await expect(h.read('/tmp/selected.pdf')).rejects.toThrow(/^Preview read rejected$/);
+  });
+  it('allows only one active read and does not release the active slot on a competing request', async () => {
+    const h = setup(undefined, undefined, 8); h.validator.addAllowedPath('/tmp/selected.pdf');
+    let finish!: (response: Response) => void;
+    h.fetchFile.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const first = h.read('/tmp/selected.pdf');
+    await expect(h.read('/tmp/selected.pdf')).rejects.toThrow('Preview read rejected');
+    await expect(h.read('/tmp/selected.pdf')).rejects.toThrow('Preview read rejected');
+    expect(h.fetchFile).toHaveBeenCalledOnce();
+    finish(new Response('first')); expect(new TextDecoder().decode(await first)).toBe('first');
+    h.fetchFile.mockResolvedValueOnce(new Response('next'));
+    expect(new TextDecoder().decode(await h.read('/tmp/selected.pdf'))).toBe('next');
+  });
+
 });

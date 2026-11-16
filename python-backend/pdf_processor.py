@@ -2000,21 +2000,33 @@ class PDFProcessor:
     def _export_to_png_zip(self, file_path: str, dpi: int = 150) -> dict[str, str]:
         """Export PNG pages and bundle them into a temporary ZIP archive."""
 
-        result = self._export_to_png(file_path, dpi=dpi)
-        output_files = result["output_files"]
+        # Keep only one intermediate PNG at a time. The ordinary PNG export
+        # still returns a complete file list; ZIP export need not retain it.
+        temp_dir = tempfile.mkdtemp()
+        self._temp_files.append(temp_dir)
+        png_file = os.path.join(temp_dir, "page.png")
         fd, zip_path = tempfile.mkstemp(suffix=".zip")
-        os.close(fd)
         self._temp_files.append(zip_path)
-
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
-            for png_file in output_files:
-                check_deadline()
-                archive.write(png_file, os.path.basename(png_file))
-
-        for png_file in output_files:
-            try:
-                os.remove(png_file)
-            except OSError:
-                pass
+        os.close(fd)
+        try:
+            with fitz.open(os.path.normpath(file_path)) as document, zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for page_num in range(len(document)):
+                    report_progress('exporting', f'正在渲染第{page_num + 1}/{len(document)}页', page_num, len(document))
+                    page = document[page_num]
+                    pix = page.get_pixmap(dpi=dpi)
+                    pix.save(png_file)
+                    del pix
+                    check_deadline()
+                    archive.write(png_file, f"page_{page_num + 1}.png")
+                    os.remove(png_file)
+                    report_progress('exporting', f'已渲染{page_num + 1}/{len(document)}页', page_num + 1, len(document))
+            check_deadline()
+        except BaseException:
+            # No partial archive is returned or granted to Main. Keep the
+            # tracked paths for the normal worker cleanup if removal fails.
+            self._remove_path(zip_path)
+            raise
+        finally:
+            self._remove_path(temp_dir)
 
         return {"zip_path": zip_path}

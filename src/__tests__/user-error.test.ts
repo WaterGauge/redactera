@@ -23,6 +23,12 @@ describe('actionable error messages', () => {
     expect(userError(new Error('Request deadline exceeded'), 'process')).toContain('处理时间过长');
     expect(userError(new Error('Cannot confirm backend termination'), 'process')).toContain('尚未确认处理已停止');
   });
+  it('explains bounded IPC failure without exposing content', () => {
+    expect(userError(new Error('Backend response exceeds IPC byte limit'), 'process')).toContain('拆分文档');
+    for (const reason of ['Backend response has invalid UTF-8', 'Backend response has invalid JSON']) {
+      expect(userError(new Error(reason), 'process')).toContain('通信异常');
+    }
+  });
   it('uses a safe contextual message for unknown objects and arbitrary Chinese errors', () => {
     expect(userError({ message: 'private-token' }, 'settings-save')).toBe('设置保存失败，请重试。');
     expect(userError('内部错误：private-token /private/customer.pdf', 'export')).toBe('无法导出文件，请检查保存位置的权限和可用空间后重试。');

@@ -8,6 +8,7 @@ import platform
 import random
 import shutil
 import sys
+import subprocess
 import time
 import zipfile
 
@@ -16,7 +17,7 @@ from PIL import Image, ImageChops
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "fixtures"))
 from ocr_fixtures import _bitmap, verify_ocr_result
-from frozen_protocol import FrozenWorker
+from frozen_protocol import FrozenWorker, source_contract
 
 
 def raster_target(image, frame, page, word, band, public):
@@ -92,17 +93,40 @@ def verify_zip(archive, pdf, dpi):
 
 def benchmark(args):
     args.output_directory.mkdir(parents=True, exist_ok=False)
+    source_root = Path(__file__).resolve().parents[2] if args.source else None
+    expected_source = source_contract(source_root) if source_root else None
     fixtures = args.output_directory / "fixtures"
     contracts = generate(fixtures)
-    report = {"platform": platform.platform(), "machine": platform.machine(), "pythonHarness": platform.python_version(),
-              "binarySha256": hashlib.sha256(args.binary.read_bytes()).hexdigest(), "workloads": [], "verified": False,
-              "method": "one fresh frozen process per workload; OS caches uncontrolled; synthetic A4 pages; default chi_sim+eng OCR; RSS includes shared-page double counting"}
+    binary = Path(sys.executable) if args.source else args.binary
+    report = {"mode": "source" if args.source else "frozen", "nativeAcceptance": False,
+              "platform": platform.platform(), "machine": platform.machine(), "pythonHarness": platform.python_version(),
+              "binarySha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "workloads": [], "verified": False,
+              "method": "one fresh process per workload; OS caches uncontrolled; synthetic A4 pages; default chi_sim+eng OCR; RSS includes shared-page double counting"}
+    if args.source:
+        report["sourceOcrVersion"] = subprocess.run(["tesseract", "--version"], capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()[0]
+        report["sourceOcrLanguages"] = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()[1:]
     for kind, contract in contracts.items():
         worker = None
         record = {"kind": kind, "pageCount": contract["pageCount"], "inputBytes": contract["inputBytes"], "sourceSha256": contract["sha256"]}
         report["workloads"].append(record)
         try:
-            worker = FrozenWorker(args.binary, args.output_directory / (kind + "-worker"))
+            worker = FrozenWorker(binary, args.output_directory / (kind + "-worker"), source_root=source_root)
+            record["contract"] = worker.manifest["contract"]
+            if expected_source is not None and record["contract"] != expected_source:
+                raise RuntimeError("Source backend changed during benchmark")
+            uploaded, upload_ms = worker.request("upload", {"file_path": str((fixtures / (kind + ".pdf")).resolve())}, timeout=600)
+            assert len(uploaded["pages"]) == contract["pageCount"]
+            record["uploadMs"] = upload_ms
+            record["uploadPayloadBytes"] = len(json.dumps(uploaded).encode("utf-8"))
+            # MuPDF CPU raster diagnostic; not a PDF.js/Electron preview measurement.
+            with fitz.open(fixtures / (kind + ".pdf")) as document:
+                preview = []
+                for index in sorted({0, len(document) // 2, len(document) - 1}):
+                    started = time.monotonic()
+                    pix = document[index].get_pixmap(dpi=96, alpha=False)
+                    preview.append({"page": index + 1, "ms": round((time.monotonic() - started) * 1000, 2),
+                                    "pixelBytes": pix.width * pix.height * pix.n})
+                record["mupdfRasterProbe"] = preview
             result, elapsed = worker.request("desensitize", {"file_path": str((fixtures / (kind + ".pdf")).resolve()),
                 "keywords": contract["keywords"], "settings": {"ocr_mode": "local", "export_dpi": 150, "fuzzy_match_enabled": False}}, timeout=600)
             pdf = args.output_directory / (kind + ".pdf")
@@ -120,12 +144,15 @@ def benchmark(args):
                         assert b"SECRET" not in document.xref_object(xref).encode() + (document.xref_stream(xref) or b"")
             else:
                 verify_ocr_result(pdf, fixtures / (kind + ".pdf"), contract)
-                dpi = 150 if kind == "scanned" else 300
+            if kind != "text" or args.source:
+                dpi = 300 if kind == "mixed" else 150
                 exported, export_ms = worker.request("export", {"file_path": result["output_path"], "format": "png_zip", "dpi": dpi}, timeout=600)
                 archive = args.output_directory / (kind + ".zip")
                 shutil.copyfile(exported["zip_path"], archive)
                 verify_zip(archive, pdf, dpi)
                 record.update(pngDpi=dpi, exportMs=export_ms, zipBytes=archive.stat().st_size, pngPixelsVerified=True)
+            if source_root is not None and source_contract(source_root) != expected_source:
+                raise RuntimeError("Source backend changed during benchmark")
             record["verified"] = True
         except Exception as error:
             record.update(verified=False, errorType=type(error).__name__)
@@ -146,7 +173,9 @@ def benchmark(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--binary", required=True, type=Path)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--binary", type=Path)
+    mode.add_argument("--source", action="store_true", help="Explicit POSIX source diagnostic; never frozen acceptance")
     parser.add_argument("--output-directory", required=True, type=Path)
     result = benchmark(parser.parse_args())
     print(json.dumps(result))

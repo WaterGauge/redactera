@@ -29,6 +29,8 @@ export function userError(error: unknown, context: ErrorContext): string {
   if (KNOWN.includes(message)) return message;
   if (message === '系统安全存储不可用') return CREDENTIAL_STORAGE_MESSAGES.unavailable;
   if (/无法读取遮盖位置/.test(message)) return '无法读取遮盖位置，请重新处理后再检查结果。';
+  if (message === 'Backend response exceeds IPC byte limit') return '处理结果超过安全通信容量，请拆分文档或减少本次处理的关键词后重试。';
+  if (message === 'Backend response has invalid UTF-8' || message === 'Backend response has invalid JSON' || message === '后端启动通信异常，请重新启动应用') return '处理服务通信异常，请重试；若仍失败，请重启应用。';
   if (/Cannot confirm backend termination/.test(message)) return '尚未确认处理已停止，请重启应用后再试。';
   if (/Backend (?:build identity|contract)|incompatible backend|backend.*(?:identity|startup).*timeout/i.test(message)) return '处理组件无法启动，请重新安装应用后再试。';
   if (/Python (?:process|backend).*(?:stopped|not running|unavailable)/i.test(message)) return '处理服务无法使用，请重启应用后再试。';

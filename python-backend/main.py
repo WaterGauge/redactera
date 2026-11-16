@@ -1,4 +1,5 @@
 import sys
+import io
 import json
 import os
 import re
@@ -7,7 +8,6 @@ from typing import Any, Iterable, Mapping
 
 # Only the backend entry point owns its streams; importing must preserve the host.
 if sys.platform == 'win32' and __name__ == '__main__':
-    import io
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding='utf-8')
@@ -45,12 +45,54 @@ log_file_path = os.getenv('LOG_FILE_PATH', '')
 processor = PDFProcessor()
 
 
-def send_progress(message: str, request_id: object = None, generation: object = None, **details: Any) -> None:
+# Keep the wire budgets in sync with src/main/backendFrames.ts. The receiver
+# remains authoritative even for a broken or compromised sender.
+MAX_RESPONSE_FRAME_BYTES = 128 * 1024 * 1024
+MAX_RESPONSE_BYTES = 256 * 1024 * 1024
+RESPONSE_LIMIT_ERROR = "Backend response exceeds IPC byte limit"
+RESPONSE_JSON_ERROR = "Backend response has invalid JSON"
+
+
+class ResponseLimitError(ValueError):
+    pass
+
+
+class ResponseBudget:
+    """Build a complete ASCII JSON line before writing it to the pipe.
+
+    Bound accumulated serialization and reserve room for a terminal failure.
+    This is not a bound on the Python result object or every encoder allocation.
+    """
+
+    def __init__(self) -> None:
+        self.remaining = MAX_RESPONSE_BYTES
+        # TextIOWrapper may translate LF to CRLF on Windows. Count that CR
+        # inside the receiver's frame limit, and both bytes in the aggregate.
+        self.line_end = 2 if sys.platform == 'win32' else 1
+        self.reserve = min(4096, MAX_RESPONSE_BYTES // 4)
+
+    def emit(self, message: Mapping[str, Any], *, terminal: bool = False) -> None:
+        limit = min(MAX_RESPONSE_FRAME_BYTES - (self.line_end - 1),
+                    self.remaining - self.line_end - (0 if terminal else self.reserve))
+        size = 0
+        with io.StringIO() as buffer:
+            for chunk in json.JSONEncoder(ensure_ascii=True, allow_nan=False).iterencode(message):
+                size += len(chunk)  # ensure_ascii makes characters equal wire bytes
+                if size > limit:
+                    raise ResponseLimitError(RESPONSE_LIMIT_ERROR)
+                buffer.write(chunk)
+            print(buffer.getvalue(), flush=True)
+        self.remaining -= size + self.line_end
+
+
+def send_progress(message: str, request_id: object = None, generation: object = None, *, budget: ResponseBudget | None = None, **details: Any) -> None:
     """发送进度通知到前端"""
     progress: dict[str, Any] = {"type": "progress", "message": message}
     if request_id is not None:
         progress.update(requestId=request_id, generation=generation, **details)
-    print(json.dumps(progress), flush=True)
+    if budget is None:
+        budget = ResponseBudget()
+    budget.emit(progress)
 
 
 def _looks_like_path(value: str) -> bool:
@@ -132,17 +174,18 @@ def handle_message(message: Mapping[str, Any]) -> None:
     action = message.get('action')
     payload = message.get('payload', {})
     request_id = message.get('requestId')
+    budget = ResponseBudget()
 
     log_event('request.received', action)
 
     # Validate required fields
     if not action or not request_id:
         log_event('request.invalid', action)
-        print(json.dumps({
+        budget.emit({
             'success': False,
             'error': 'Missing required fields: action or requestId',
             'requestId': request_id or 'unknown'
-        }), flush=True)
+        }, terminal=True)
         return
 
     def execute() -> Any:
@@ -175,12 +218,11 @@ def handle_message(message: Mapping[str, Any]) -> None:
 
     try:
         def progress(event: dict[str, Any]) -> None:
-            send_progress(event['message'], request_id=request_id, generation=message.get('generation'),
+            send_progress(event['message'], request_id=request_id, generation=message.get('generation'), budget=budget,
                           **{key: value for key, value in event.items() if key != 'message'})
         with request_scope(message.get('deadlineMs'), progress):
             result = execute()
             check_deadline()
-        log_event('request.completed', action)
         response: dict[str, Any] = {
             'success': True,
             'data': result,
@@ -198,7 +240,17 @@ def handle_message(message: Mapping[str, Any]) -> None:
         }
 
     response.update(type='result', generation=message.get('generation'))
-    print(json.dumps(response), flush=True)
+    try:
+        budget.emit(response, terminal=True)
+        if response['success']:
+            log_event('request.completed', action)
+    except (ResponseLimitError, ValueError, TypeError, OverflowError, RecursionError) as error:
+        # No partial line has been written for a serialization/size failure.
+        # A failure terminal never carries the result or document content.
+        log_event('request.failed', action, error)
+        budget.emit({'type': 'result', 'success': False, 'requestId': request_id,
+                     'generation': message.get('generation'),
+                     'error': RESPONSE_LIMIT_ERROR if isinstance(error, ResponseLimitError) else RESPONSE_JSON_ERROR}, terminal=True)
 
 def _record_worker_state(state: str) -> bool:
     """Persist this worker's identity before accepting any document request."""
