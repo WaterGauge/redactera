@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Bundle Name="Redactera Installer PoC Bundle" Manufacturer="Redactera Installer PoC"
+          Version="1.0.0" UpgradeCode="{EEA7864A-A7E7-46B7-977E-DAACFC94F4E5}"
+          Compressed="yes" Condition="NativeMachine = 34404 AND WindowsBuildNumber &gt;= 19045 AND NTProductType = 1">
+    <BootstrapperApplication>
+      <!-- Native stock BA intentionally precedes any custom WPF work. -->
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" />
+    </BootstrapperApplication>
+    <Variable Name="VcInstalled" Type="numeric" Value="0" />
+    <Variable Name="VcVersion" Type="version" Value="0.0.0.0" />
+    <util:RegistrySearch Id="FindVcInstalled" Root="HKLM" Bitness="always64"
+        Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+        Value="Installed" Result="value" Variable="VcInstalled" />
+    <util:RegistrySearch Id="FindVcVersion" Root="HKLM" Bitness="always64"
+        Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+        Value="Version" Result="value" Variable="VcVersion" />
+    <Chain>
+      <ExePackage Id="VcRedistX64" SourceFile="vc_redist.x64.exe"
+          PerMachine="yes" Permanent="yes" Vital="yes" Compressed="yes"
+          DetectCondition="VcInstalled = 1 AND VcVersion &gt;= v$(MinimumVcVersion)"
+          InstallArguments="/install /quiet /norestart">
+        <ExitCode Value="0" Behavior="success" />
+        <ExitCode Value="3010" Behavior="scheduleReboot" />
+        <ExitCode Value="1641" Behavior="forceReboot" />
+        <ExitCode Behavior="error" />
+      </ExePackage>
+      <!-- Let Burn plan the dual-purpose MSI scope; do not force elevation. -->
+      <MsiPackage Id="MarkerMsi" SourceFile="RedacteraInstallerPoC.msi"
+                  Visible="no" Vital="yes" Compressed="yes" />
+    </Chain>
+  </Bundle>
+</Wix>

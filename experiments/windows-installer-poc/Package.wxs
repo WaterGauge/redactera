@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- Synthetic package only; never reuse these identities in a release. -->
+  <Package Name="Redactera Installer PoC Marker" Manufacturer="Redactera Installer PoC"
+           Version="1.0.0" UpgradeCode="{B76229C2-D71D-4261-90C2-FC952F91D148}"
+           Scope="perUserOrMachine" UpgradeStrategy="none" InstallerVersion="500">
+    <MediaTemplate EmbedCab="yes" />
+    <Launch Condition="VersionNT64 AND MsiNTProductType = 1"
+            Message="This synthetic MSI requires a 64-bit Windows client." />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="ProbeDirectory" Name="RedacteraInstallerPoC-B76229C2">
+        <Component Id="ProbePayload" Guid="{817064D3-87E1-4E4A-B48F-89A1071291AB}">
+          <File Id="MarkerFile" Source="marker.txt" KeyPath="yes" />
+        </Component>
+        <Component Id="ProbeRegistration" Guid="{CEE5B10C-B0CB-40CA-A163-B00AF24CD15F}">
+          <RegistryValue Root="HKMU" Key="Software\RedacteraInstallerPoC-B76229C2"
+                         Name="MarkerVersion" Value="1.0.0" Type="string" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="ProbeFeature" Title="Synthetic marker">
+      <ComponentRef Id="ProbePayload" />
+      <ComponentRef Id="ProbeRegistration" />
+    </Feature>
+  </Package>
+</Wix>
