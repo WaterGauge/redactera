@@ -96,6 +96,32 @@ def file_digest(path):
         return hashlib.file_digest(reader, "sha256").hexdigest()
 
 
+def verify_source_inputs(directory, approved, verify_tools=False):
+    """Independent read-only preflight; run from a trusted copy before PowerShell."""
+    if directory.absolute() != directory.resolve() or not directory.is_dir():
+        raise ValueError("Expected a controlled, non-linked source directory")
+    for key in ("sourceCommit", "sourceTree"):
+        match(GIT, approved[key])
+    fields(approved["sourceHashes"], SOURCES)
+    for name in SOURCES:
+        if file_digest(directory / name) != digest(approved["sourceHashes"][name]):
+            raise ValueError("Preflight source mismatch: " + name)
+    if verify_tools:
+        match(WIX, approved["wixVersion"])
+        version(approved["minimumVcVersion"])
+        if approved["minimumVcVersion"].startswith("v"):
+            raise ValueError("Minimum must be a four-field numeric version")
+        for name in TOOLS:
+            entry = approved[name]
+            fields(entry, ("path", "sha256"))
+            path = Path(entry["path"])
+            if not path.is_absolute() or file_digest(path) != digest(entry["sha256"]):
+                raise ValueError("Preflight tool mismatch: " + name)
+    return {"status": "preflight-inputs-match", "sourceCommit": approved["sourceCommit"],
+            "sourceTree": approved["sourceTree"], "helperSha256": approved["sourceHashes"]["PocNative.ps1"],
+            "toolsChecked": verify_tools, "nativeAcceptance": False}
+
+
 def verify_artifact_files(artifact, directory, approved):
     """Bind the artifact claims to independent approved input hashes and actual bytes."""
     artifact_check(artifact)
@@ -253,11 +279,23 @@ def load_json(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--artifact", required=True, type=Path)
+    parser.add_argument("--artifact", type=Path)
+    parser.add_argument("--preflight-source", type=Path, help="Read-only check of approved source before PowerShell")
+    parser.add_argument("--verify-tools", action="store_true", help="Also check four approved tool file hashes")
     parser.add_argument("--approved-inputs", required=True, type=Path)
-    parser.add_argument("--scope", required=True, choices=("user", "machine"))
-    parser.add_argument("receipts", nargs=8, type=Path)
+    parser.add_argument("--scope", choices=("user", "machine"))
+    parser.add_argument("receipts", nargs="*", type=Path)
     args = parser.parse_args()
+    if args.preflight_source is not None:
+        if args.artifact is not None or args.scope is not None or args.receipts:
+            parser.error("Preflight cannot be combined with receipt verification")
+        try:
+            print(json.dumps(verify_source_inputs(args.preflight_source, load_json(args.approved_inputs), args.verify_tools)))
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            parser.exit(1, f"Preflight rejected: {exc}\n")
+        return
+    if args.artifact is None or args.scope is None or len(args.receipts) != 8 or args.verify_tools:
+        parser.error("Receipt verification requires artifact, scope and eight receipts")
     try:
         artifact_hash = file_digest(args.artifact.absolute())
         artifact = load_json(args.artifact)

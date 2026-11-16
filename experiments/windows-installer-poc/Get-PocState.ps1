@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][guid]$RunId,
     [Parameter(Mandatory)][ValidateSet('baseline','installed','repaired','removed','cancelled')][string]$Phase,
     [Parameter(Mandatory)][string]$ArtifactPath,
+    [Parameter(Mandatory)][string]$ExpectedHelperSha256,
     [Parameter(Mandatory)][string]$BundlePath
 )
 Set-StrictMode -Version Latest
@@ -12,11 +13,21 @@ if ($env:OS -ne 'Windows_NT' -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -or $en
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Collect from the actual non-elevated login.' }
-. (Join-Path $PSScriptRoot 'PocNative.ps1')
+# Expected hash comes from the independently verified, approved source manifest.
+# Do not load executable helper code to perform its own identity check.
+$helper = Join-Path $PSScriptRoot 'PocNative.ps1'
+$helperItem = Get-Item -LiteralPath $helper -Force
+if ($ExpectedHelperSha256 -cnotmatch '^[a-f0-9]{64}$' -or $helperItem.PSIsContainer -or
+    ($helperItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+    (Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedHelperSha256) {
+    throw 'Helper identity mismatch before execution.'
+}
+. $helper
 function HashFile([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 $artifactFile = Resolve-PocPath $ArtifactPath
 $artifactHash = HashFile $artifactFile
 $artifact = Get-Content -LiteralPath $artifactFile -Raw | ConvertFrom-Json
+if ($artifact.sourceHashes.'PocNative.ps1' -cne $ExpectedHelperSha256) { throw 'Artifact helper identity mismatch.' }
 $bundleHash = HashFile (Resolve-PocPath $BundlePath)
 if ($artifact.schema -ne 2 -or $artifact.kind -cne 'synthetic-poc-not-release' -or $artifact.bundleSha256 -cne $bundleHash -or $artifact.productUpgradeCode -cne '{B76229C2-D71D-4261-90C2-FC952F91D148}' -or $artifact.bundleUpgradeCode -cne '{EEA7864A-A7E7-46B7-977E-DAACFC94F4E5}') { throw 'Artifact identity mismatch.' }
 foreach ($name in @('Get-PocState.ps1','PocNative.ps1')) {

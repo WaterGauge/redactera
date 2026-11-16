@@ -10,8 +10,17 @@ This isolated PoC tests WiX 7.0.1 Burn + one dual-purpose x64 MSI with a synthet
 
 The independently prepared and approved local JSON must contain sourceCommit/sourceTree (40 lowercase hex), sourceHashes (SHA256 for **all nine experiment files**), wixVersion (exact approved 7.0.1 CLI output), minimumVcVersion (four-field numeric v14 minimum justified by actual dependencies), and wix, bal, util, vcRedist objects (absolute local path and lowercase sha256). Prepare the full SDK/CLI/extension dependency closure, licenses, provenance and actual x64 VC payload evidence independently; the script's named input hashes are not the entire toolchain lock. Never guess a hash or adopt the test fixture's VC threshold. The approved manifest is separate from build outputs; do not regenerate it from an unverified local tree.
 
+Before executing either PowerShell entry point, use an independently trusted copy of verify_observations.py (its own SHA256 verified out of band) to check the nine source files against the approved manifest. Keep the approved manifest and verified source in a controlled directory, without untrusted writers. Run the preflight on the actual Windows paths; it only hashes files, not executes tools. It does not establish the complete toolchain closure, license, signatures, or resistance to concurrent malicious replacement.
+
 ```powershell
-.\Build-Poc.ps1 -InputsJson C:\isolated\approved-inputs.json -OutputDirectory C:\isolated\poc-build-1 -ApprovedOfflineInputs
+python C:\trusted\verify_observations.py --preflight-source C:\isolated\poc-source --approved-inputs C:\isolated\approved-inputs.json --verify-tools
+```
+
+Source-only preflight (omit --verify-tools) is sufficient for rechecking the same source before observation; tool files need not exist in the observation VM. In both entry points explicitly supply ExpectedHelperSha256 from the independently approved manifest, not a new hash of the helper. Internal entry-point checks compare it before dot-sourcing PocNative.ps1 and again against the input/artifact identity. An external preflight and trusted source copy remain mandatory; the entry point does not authenticate its own code.
+
+```powershell
+$approved = Get-Content -LiteralPath C:\isolated\approved-inputs.json -Raw | ConvertFrom-Json
+.\Build-Poc.ps1 -InputsJson C:\isolated\approved-inputs.json -OutputDirectory C:\isolated\poc-build-1 -ExpectedHelperSha256 $approved.sourceHashes.'PocNative.ps1' -ApprovedOfflineInputs
 ```
 
 Use a fresh, absolute output directory with an existing trusted parent. Before and after the build all staged sources and VC bytes are checked against approved input hashes. After building MSI, run WiX CLI default MSI validation (WiX's own stock exclusions apply; no project suppressions) and explicitly `wix msi validate -ice ICE105`. Record both commands, exit codes, logs and unchanged MSI hash; inspect the real log and verify the ICE actually ran, including a deliberate failure in a separately approved synthetic test. Nonzero/missing exit or changed bytes prevents creation of artifact.json. Read-only MSI database queries bind ProductCode, UpgradeCode, ProductName, ALLUSERS and MSIINSTALLPERUSER. Burn extraction binds the actual registration Code and PrimaryUpgradeCode, chained MSI ProductCode and extracted embedded MSI/VC bytes. Preserve the complete build directory and independently inspect actual MSI tables/architecture, full toolchain closure, logs, embedded payload and Burn manifest before authorizing installation. No real product GUIDs are allocated.
@@ -23,7 +32,8 @@ Use a fresh snapshot for each scope and runtime state; record OS/SKU/build/UBR, 
 For each successful lifecycle collect eight read-only JSON observations in order A/B baseline, A/B installed, A/B repaired, A/B removed. Same fresh random RunId, same artifact.json and bundle bytes. Each actual account runs the observer non-elevated:
 
 ```powershell
-.\Get-PocState.ps1 -RunId 'a81cb8a7-30c2-4e04-a049-aeb8831ce10e' -Phase baseline -ArtifactPath C:\isolated\poc-build-1\artifact.json -BundlePath C:\isolated\poc-build-1\RedacteraInstallerPoC-Setup.exe
+$approved = Get-Content -LiteralPath C:\isolated\approved-inputs.json -Raw | ConvertFrom-Json
+.\Get-PocState.ps1 -RunId 'a81cb8a7-30c2-4e04-a049-aeb8831ce10e' -Phase baseline -ArtifactPath C:\isolated\poc-build-1\artifact.json -BundlePath C:\isolated\poc-build-1\RedacteraInstallerPoC-Setup.exe -ExpectedHelperSha256 $approved.sourceHashes.'PocNative.ps1'
 ```
 
 The observer checks exact compiled ProductCode and Burn registration Code, matching related MSI and Burn family registrations (including hidden/name-changed entries), both registry views, actual MsiEnumProductsEx contexts, marker bytes and x64 runtime registration. It does not enumerate other users from A or expose raw SIDs, personal paths or names. The RunId-salted account token is not an attestation. Independently verify account privilege/host/snapshot, cache paths, ACL and real VC load; exact receipts do not prove all these facts. Capture cancelled observations and real logs separately; the eight-receipt checker is for successful lifecycles only.
@@ -39,6 +49,7 @@ The observer checks exact compiled ProductCode and Burn registration Code, match
 | 01-G | Uninstall from original maintenance entry; exact identity and all hidden remnants absent, shared VC retained, other account unchanged. |
 | 01-H | Actual prerequisite/MSI failure, rollback, restart 3010/1641 in separately authorized snapshot; B cannot take over A's resume. Do not simulate exit code and claim native evidence. |
 | 01-I | Hidden bundle, wrong product/bundle ID, extra family registration, marker only in wrong registry view, invalid relative/drive-relative/UNC path, reparse ancestor, existing output, wrong input bytes, same-ID duplicate machine views. Independently verify these negative controls and true ACL. |
+| 01-J | In a separate authorized disposable snapshot, copy the verified source, change only the helper to a harmless Write-Output marker, retain the original approved hash, and check that the trusted external preflight rejects it. For the internal gate negative control only, invoke each trusted entry point with the original expected hash and synthetic absolute input arguments; it must stop before loading the helper, emitting no marker, and performing no installation or build. Restore verified source before any real experiment. Do not run a modified helper directly. |
 
 For the successful lifecycles only, run the checker with the preserved build directory and independently approved input manifest:
 

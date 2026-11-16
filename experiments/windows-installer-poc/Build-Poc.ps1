@@ -3,6 +3,7 @@
 param(
     [Parameter(Mandatory)][string]$InputsJson,
     [Parameter(Mandatory)][string]$OutputDirectory,
+    [Parameter(Mandatory)][string]$ExpectedHelperSha256,
     [Parameter(Mandatory)][switch]$ApprovedOfflineInputs
 )
 Set-StrictMode -Version Latest
@@ -11,8 +12,18 @@ if (-not $ApprovedOfflineInputs) { throw 'Candidate tooling, fees and redistribu
 if ($env:OS -ne 'Windows_NT' -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -or $env:PROCESSOR_ARCHITEW6432) { throw 'Use native x64 Windows PowerShell.' }
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Build from a non-elevated session.' }
-. (Join-Path $PSScriptRoot 'PocNative.ps1')
+# Expected hash comes from the independently verified, approved source manifest.
+# Do not load executable helper code to perform its own identity check.
+$helper = Join-Path $PSScriptRoot 'PocNative.ps1'
+$helperItem = Get-Item -LiteralPath $helper -Force
+if ($ExpectedHelperSha256 -cnotmatch '^[a-f0-9]{64}$' -or $helperItem.PSIsContainer -or
+    ($helperItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+    (Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedHelperSha256) {
+    throw 'Helper identity mismatch before execution.'
+}
+. $helper
 $inputs = Get-Content -LiteralPath (Resolve-PocPath $InputsJson) -Raw | ConvertFrom-Json
+if ($inputs.sourceHashes.'PocNative.ps1' -cne $ExpectedHelperSha256) { throw 'Approved helper identity mismatch.' }
 function HashFile([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function VerifiedFile($entry) {
     if ($entry.sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Pinned SHA256 required.' }

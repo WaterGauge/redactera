@@ -8,7 +8,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from verify_observations import (EMPTY, SOURCES, TOOLS, PRODUCT_FAMILY, BUNDLE_FAMILY,
-                                 artifact_check, observation_check, verify_artifact_files, load_json, version)
+                                 artifact_check, observation_check, verify_artifact_files, load_json, version, verify_source_inputs)
 
 ROOT = Path(__file__).parent
 NS = {"w": "http://wixtoolset.org/schemas/v4/wxs", "u": "http://wixtoolset.org/schemas/v4/wxs/util",
@@ -133,6 +133,33 @@ class TestObservationContract(unittest.TestCase):
                 path.write_text(invalid)
                 with self.assertRaises(ValueError): load_json(path)
 
+    def test_preflight_uses_independent_source_and_tool_hashes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp).resolve()
+            approved = {"sourceCommit": "1" * 40, "sourceTree": "2" * 40,
+                        "sourceHashes": {}, "wixVersion": "7.0.1", "minimumVcVersion": "14.51.0.0"}
+            for name in SOURCES:
+                path = directory / name
+                path.write_bytes(name.encode())
+                approved["sourceHashes"][name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            for name in TOOLS:
+                path = directory / name
+                path.write_bytes(name.encode())
+                approved[name] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            self.assertFalse(verify_source_inputs(directory, approved)["toolsChecked"])
+            self.assertTrue(verify_source_inputs(directory, approved, True)["toolsChecked"])
+            helper = directory / "PocNative.ps1"
+            original = helper.read_bytes()
+            # The harmless marker is only data here. The native no-execution
+            # control must run separately in an authorized Windows snapshot.
+            helper.write_bytes(b"Write-Output 'SYNTHETIC-HASH-NEGATIVE'")
+            with self.assertRaisesRegex(ValueError, "Preflight source mismatch"):
+                verify_source_inputs(directory, approved)
+            helper.write_bytes(original)
+            (directory / "wix").write_bytes(b"changed tool")
+            with self.assertRaisesRegex(ValueError, "Preflight tool mismatch"):
+                verify_source_inputs(directory, approved, True)
+
     def test_artifact_external_hash_binding(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp).resolve(); artifact = deepcopy(ARTIFACT)
@@ -196,6 +223,10 @@ class TestCandidateSources(unittest.TestCase):
         self.assertIn("ReparsePoint", native); self.assertIn("DriveType]::Fixed", native); self.assertNotIn("IsPathRooted", build+native)
         self.assertIn("MsiEnumProductsExW", native); self.assertIn("MsiEnumRelatedProductsW", native)
         self.assertIn("BundleUpgradeCode", observe); self.assertIn("Registry32", observe); self.assertIn("Registry64", observe)
+        for entry in (build, observe):
+            self.assertLess(entry.index("Helper identity mismatch before execution"), entry.index(". $helper"))
+            self.assertIn("-cne $ExpectedHelperSha256", entry)
+
 
 
 if __name__ == "__main__":
