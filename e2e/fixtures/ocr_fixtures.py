@@ -7,9 +7,9 @@ import pymupdf as fitz
 from PIL import Image, ImageChops
 
 OCR_CONTRACT = {
-    "scanned.pdf": {"pageCount": 2, "keywords": ["SECRET", "张三"], "public": [],
+    "scanned.pdf": {"pageCount": 2, "keywords": ["SECRET", "张三"], "objectMarkers": ["SECRET", "张三"], "public": [],
                     "rasterWords": ["SECRET", "张三"], "imageFrames": [[0, 0, 400, 180], [0, 0, 400, 180]]},
-    "mixed.pdf": {"pageCount": 1, "keywords": ["TEXTSECRET", "IMAGESECRET"], "public": ["PUBLIC HEADER"],
+    "mixed.pdf": {"pageCount": 1, "keywords": ["TEXTSECRET", "IMAGESECRET"], "objectMarkers": ["TEXTSECRET", "IMAGESECRET"], "public": ["PUBLIC HEADER"],
                   "rasterWords": ["IMAGESECRET"], "imageFrames": [[24, 100, 424, 280]]},
 }
 

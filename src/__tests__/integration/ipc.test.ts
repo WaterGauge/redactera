@@ -132,7 +132,7 @@ describe('IPC Integration', () => {
       latestVersion: '2.0.0',
       error: {
         code: 'UPDATE_CHECK_FAILED',
-        message: 'offline',
+        message: 'Update check failed',
       },
     });
   });

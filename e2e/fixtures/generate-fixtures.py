@@ -15,9 +15,9 @@ from ocr_fixtures import OCR_CONTRACT, generate_ocr, inspect_ocr
 
 CONTRACT = {
     "sample.pdf": {"pageCount": 2, "required": ["SECRET", "PUBLIC CONTROL", "张三", "公开信息"],
-                   "keywords": ["SECRET", "张三"], "public": ["PUBLIC CONTROL", "公开信息"]},
+                   "keywords": ["SECRET", "张三"], "objectMarkers": ["SECRET", "张三"], "public": ["PUBLIC CONTROL", "公开信息"]},
     "crossline-sample.pdf": {"pageCount": 1, "required": ["SEC\nRET", "PUBLIC CONTROL", "跨行样例"],
-                             "keywords": ["SECRET"], "splitTarget": ["SEC", "RET"], "public": ["PUBLIC CONTROL"]},
+                             "keywords": ["SECRET"], "objectMarkers": ["SECRET"], "splitTarget": ["SEC", "RET"], "public": ["PUBLIC CONTROL"]},
 }
 
 

@@ -105,3 +105,12 @@ describe('bounded release pagination and rate-limit recovery', () => {
     expect(await h.check(true)).toMatchObject({ updateAvailable: true, latestVersion: '2.2.0-rc.1' });
   });
 });
+
+
+it('does not propagate credentials or signed URLs from network exceptions', async () => {
+  const h = harness();
+  h.fetcher.mockRejectedValueOnce(new Error('proxy https://synthetic:PRIVATE@proxy.invalid/?token=PRIVATE'));
+  const result = await h.check();
+  expect(result).toMatchObject({ ...failed(), error: { code: 'UPDATE_CHECK_FAILED', message: 'Update check failed' } });
+  expect(JSON.stringify(result)).not.toContain('PRIVATE');
+});

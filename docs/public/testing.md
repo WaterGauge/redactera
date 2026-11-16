@@ -44,6 +44,6 @@ python e2e/support/benchmark-frozen.py --source --output-directory <fresh-direct
 python e2e/support/benchmark-fuzzy.py
 ```
 
-源码诊断报告明确标为 `mode=source`、`nativeAcceptance=false`，记录实际后端源码合同、OCR 版本、打开/处理/导出耗时、进程组 RSS 与临时文件采样。MuPDF 栅格探针不是 Electron/PDF.js 实际预览；采样峰值不是系统内存硬上限。模糊匹配评估使用人工标注合成文本与 OCR token，不能据此推定真实 OCR 识别准确率。最终输出断言和负控制由 `python-backend/tests/test_independent_output_contract.py` 验证。正常冻结后端仍使用 `--binary` 入口；正式原生验收不能用源码诊断替代。
+源码诊断报告明确标为 `mode=source`、`nativeAcceptance=false`，记录实际后端源码合同、OCR 版本、打开/处理/导出耗时、进程组 RSS 与临时文件采样。MuPDF 栅格探针不是 Electron/PDF.js 实际预览；采样峰值不是系统内存硬上限。功能 `verified` 与 `resourceObservationValid` 分开；成功采样数为零、采样错误或线程未收束时不将资源观测当有效基准。源码 OCR 身份在与实际 worker 相同的 PATH 和环境下取得。性能基准是已知目标/页头/像素的轻量检查，不代替完整的保存后验证器。模糊匹配评估使用人工标注合成文本与 OCR token，不能据此推定真实 OCR 识别准确率。最终输出断言和负控制由 `python-backend/tests/test_independent_output_contract.py` 验证。正常冻结后端仍使用 `--binary` 入口；正式原生验收不能用源码诊断替代。
 
 Windows 上使用现有授权的测试解释器，将 `PDF_TEST_PYTHON` 设置为其绝对路径，运行 `npx vitest run src/__tests__/security/windows-recovery-native.test.ts`。该入口仅创建自身隔离的合成工作区和子进程，检查活 worker 保留、确认 Job 停止后回收及未知记录保留；它不执行系统注销、不清理其他实例。真正的注销、重启、异常退出和 Win10/Win11 原生成品会话测试仍需隔离 Windows 环境。

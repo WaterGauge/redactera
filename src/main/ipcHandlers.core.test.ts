@@ -411,7 +411,7 @@ describe('registerIpcHandlers default update service', () => {
     registerIpcHandlers({
       ipcMain: ipcMain as any,
       app: { getVersion: vi.fn(() => '1.2.0'), getPath: vi.fn() } as any,
-      shell: { openExternal: vi.fn().mockRejectedValue(new Error('browser blocked')) } as any,
+      shell: { openExternal: vi.fn().mockRejectedValue(new Error('browser blocked https://synthetic:PRIVATE@proxy.invalid')) } as any,
       registerCoreHandlers: vi.fn(),
     } as any);
 
@@ -422,7 +422,7 @@ describe('registerIpcHandlers default update service', () => {
       latestVersion: '1.2.0',
       error: {
         code: 'UPDATE_CHECK_FAILED',
-        message: 'GitHub Releases API returned 503',
+        message: 'Update check failed',
       },
     });
 
@@ -431,7 +431,7 @@ describe('registerIpcHandlers default update service', () => {
       success: false,
       error: {
         code: 'OPEN_RELEASE_PAGE_FAILED',
-        message: 'browser blocked',
+        message: 'Unable to open release page',
       },
     });
   });

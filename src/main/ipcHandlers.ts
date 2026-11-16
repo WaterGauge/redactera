@@ -720,7 +720,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
           error instanceof UpdateQueryError ? error.code : error instanceof Error && error.name === 'AbortError'
             ? 'UPDATE_CHECK_TIMEOUT'
             : 'UPDATE_CHECK_FAILED',
-          error instanceof Error ? error.message : 'Unknown update error'
+          'Update check failed'
         ),
       };
     }
@@ -733,12 +733,12 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
   const openReleasePageHandler = async (): Promise<{ success: boolean; error?: UpdateCheckResult['error'] }> => {
     try {
       return await updateService.openReleasePage();
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: createStructuredError(
           'OPEN_RELEASE_PAGE_FAILED',
-          error instanceof Error ? error.message : 'Unknown release page error'
+          'Unable to open release page'
         ),
       };
     }

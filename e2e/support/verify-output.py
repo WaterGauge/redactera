@@ -24,11 +24,34 @@ def marker_bytes(word):
         yield value.hex().upper().encode("ascii")
 
 
+def verify_public_regions(original, document, words):
+    # Known synthetic controls only. Search the source, never derive the
+    # expected position or pixels from the output under test.
+    for source_page, result_page in zip(original, document):
+        assert source_page.rect == result_page.rect and source_page.rotation == result_page.rotation, "Changed page geometry"
+        for word in words:
+            for box in source_page.search_for(word):
+                clip = box * source_page.rotation_matrix
+                before = source_page.get_pixmap(clip=clip, dpi=144, colorspace=fitz.csRGB, alpha=False)
+                after = result_page.get_pixmap(clip=clip, dpi=144, colorspace=fitz.csRGB, alpha=False)
+                assert before.width > 0 and before.height > 0, "Missing source public visual control"
+                assert min(before.samples) < 100 and max(before.samples) > 200, "Missing source public visual control"
+                assert (before.width, before.height, before.samples) == (after.width, after.height, after.samples), "Public control pixels changed on its original page"
+
+
 def verify_pdf(file, sample, contract):
     assert file.read_bytes() != sample.read_bytes(), "Export is the original PDF"
     targets = contract.get("splitTarget", contract["keywords"])
-    markers = tuple({pattern for word in contract.get("objectMarkers", ["SECRET"])
-                     for pattern in marker_bytes(word)})
+    words = set(contract["keywords"]) | set(contract.get("objectMarkers", []))
+    markers = tuple({pattern for word in words for pattern in marker_bytes(word)})
+    # A short split fragment can occur by chance in compressed binary data.
+    # Check split pieces as complete literal/hex PDF strings, not arbitrary
+    # raw substrings; the page-text check below also covers split pieces.
+    fragments = tuple({pattern for word in contract.get("splitTarget", [])
+                       for encoding in ("utf-8", "utf-16-be", "utf-16-le")
+                       for value in (word.encode(encoding),)
+                       for pattern in (b"(" + value + b")", b"<" + value.hex().encode() + b">",
+                                       b"<" + value.hex().upper().encode() + b">")})
     # Check physical bytes as well as the current xref view: an incremental
     # update can make old content unreachable while leaving its bytes behind.
     physical = file.read_bytes()
@@ -44,11 +67,18 @@ def verify_pdf(file, sample, contract):
             for word in contract["public"]:
                 assert result_text.count(word) >= source_text.count(word), "Public control text missing on its original page"
             assert all(word not in result_text for word in targets), "Sensitive source text remains recoverable"
+        verify_public_regions(original, document, contract["public"])
+        # Decoded metadata and attachments are explicit observable carriers.
+        for value in document.metadata.values():
+            if isinstance(value, str):
+                assert not any(word in value for word in words), "Sensitive marker remains in PDF metadata"
+        for name in document.embfile_names():
+            assert not any(pattern in document.embfile_get(name) for pattern in markers), "Sensitive marker remains in an embedded file"
         for xref in range(1, document.xref_length()):
             data = document.xref_object(xref).encode("utf-8")
             if document.xref_is_stream(xref):
                 data += (document.xref_stream(xref) or b"") + (document.xref_stream_raw(xref) or b"")
-            assert not any(pattern in data for pattern in markers), "Sensitive marker remains in a PDF object"
+            assert not any(pattern in data for pattern in (*markers, *fragments)), "Sensitive marker remains in a PDF object"
     if contract.get("rasterTargets"):
         verify_ocr_result(file, sample, contract)
 

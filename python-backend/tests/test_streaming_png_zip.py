@@ -84,3 +84,32 @@ def test_failure_after_first_page_removes_partial_archive(workload, monkeypatch,
     assert written == ['page_1.png']
     assert list(private.iterdir()) == []
     assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize('failure', ['mkstemp', 'close'])
+def test_allocation_failure_reclaims_owned_temporary_paths(workload, monkeypatch, failure):
+    processor, source, private = workload
+    original = source.read_bytes()
+    def fail(*args, **kwargs):
+        raise OSError('Synthetic allocation failure')
+    if failure == 'mkstemp':
+        monkeypatch.setattr(tempfile, 'mkstemp', fail)
+    else:
+        close = pdf_processor.os.close
+        allocate = tempfile.mkstemp
+        allocated = set()
+        def track(*args, **kwargs):
+            fd, path = allocate(*args, **kwargs)
+            allocated.add(fd)
+            return fd, path
+        def close_then_fail(fd):
+            close(fd)
+            if fd in allocated:
+                allocated.remove(fd)
+                fail()
+        monkeypatch.setattr(tempfile, 'mkstemp', track)
+        monkeypatch.setattr(pdf_processor.os, 'close', close_then_fail)
+    with pytest.raises(OSError, match='Synthetic allocation failure'):
+        processor.export(str(source), 'png_zip')
+    assert list(private.iterdir()) == []
+    assert source.read_bytes() == original

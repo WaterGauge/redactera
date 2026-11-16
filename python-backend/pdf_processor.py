@@ -2005,10 +2005,11 @@ class PDFProcessor:
         temp_dir = tempfile.mkdtemp()
         self._temp_files.append(temp_dir)
         png_file = os.path.join(temp_dir, "page.png")
-        fd, zip_path = tempfile.mkstemp(suffix=".zip")
-        self._temp_files.append(zip_path)
-        os.close(fd)
+        zip_path: str | None = None
         try:
+            fd, zip_path = tempfile.mkstemp(suffix=".zip")
+            self._temp_files.append(zip_path)
+            os.close(fd)
             with fitz.open(os.path.normpath(file_path)) as document, zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
                 for page_num in range(len(document)):
                     report_progress('exporting', f'正在渲染第{page_num + 1}/{len(document)}页', page_num, len(document))
@@ -2024,7 +2025,8 @@ class PDFProcessor:
         except BaseException:
             # No partial archive is returned or granted to Main. Keep the
             # tracked paths for the normal worker cleanup if removal fails.
-            self._remove_path(zip_path)
+            if zip_path is not None:
+                self._remove_path(zip_path)
             raise
         finally:
             self._remove_path(temp_dir)

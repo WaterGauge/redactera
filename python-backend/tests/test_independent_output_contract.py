@@ -96,3 +96,74 @@ def test_public_control_cannot_move_to_wrong_page(source, result, tmp_path):
 def test_missing_source_target_cannot_certify(result, source):
     with pytest.raises(AssertionError, match='Missing source sensitive control'):
         oracle.verify_pdf(result, source, {**CONTRACT, 'keywords': ['NOT_IN_SOURCE']})
+
+
+@pytest.mark.parametrize('carrier', ['metadata', 'embedded', 'raw_revision'])
+def test_unicode_keyword_in_default_contract_cannot_pass(tmp_path, carrier):
+    original = tmp_path / 'unicode-source.pdf'
+    result = tmp_path / 'unicode-result.pdf'
+    bad = tmp_path / 'unicode-bad.pdf'
+    contract = {'pageCount': 1, 'keywords': ['SECRET', '张三'], 'public': ['PUBLIC CONTROL']}
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 70), 'PUBLIC CONTROL')
+        page.insert_text((40, 120), 'SECRET')
+        page.insert_text((40, 160), '张三', fontname='china-s')
+        doc.save(original)
+    with fitz.open(original) as doc:
+        for word in contract['keywords']:
+            for rect in doc[0].search_for(word):
+                doc[0].add_redact_annot(rect)
+        doc[0].apply_redactions()
+        doc.save(result, garbage=4, deflate=True)
+    oracle.verify_pdf(result, original, contract)
+    if carrier == 'raw_revision':
+        bad.write_bytes(result.read_bytes() + b'\n% ' + '张三'.encode('utf-16-be') + b'\n')
+    else:
+        with fitz.open(result) as doc:
+            if carrier == 'metadata':
+                doc.set_metadata({'subject': '张三'})
+            else:
+                doc.embfile_add('hidden.txt', '张三'.encode('utf-8'))
+            doc.save(bad, garbage=4, deflate=True)
+    with pytest.raises(AssertionError, match='Sensitive'):
+        oracle.verify_pdf(bad, original, contract)
+
+
+def test_public_black_overlay_cannot_pass(source, result, tmp_path):
+    bad = tmp_path / 'covered.pdf'
+    with fitz.open(result) as doc:
+        page = doc[0]
+        for rect in page.search_for(PUBLIC):
+            page.draw_rect(rect, color=None, fill=(0, 0, 0))
+        assert PUBLIC in page.get_text()  # extractable, but not visible
+        doc.save(bad, garbage=4, deflate=True)
+    with pytest.raises(AssertionError, match='Public control pixels changed'):
+        oracle.verify_pdf(bad, source, CONTRACT)
+
+
+def test_crossline_fragments_in_pdf_string_are_rejected(tmp_path):
+    original = tmp_path / 'split-source.pdf'
+    output = tmp_path / 'split-result.pdf'
+    bad = tmp_path / 'split-bad.pdf'
+    contract = {'pageCount': 1, 'keywords': ['SECRET'], 'splitTarget': ['SEC', 'RET'], 'public': ['PUBLIC CONTROL']}
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 70), 'PUBLIC CONTROL')
+        page.insert_text((40, 120), 'SEC')
+        page.insert_text((40, 160), 'RET')
+        doc.save(original)
+    # The independent oracle accepts a genuinely removed split fixture,
+    # then rejects a hidden PDF literal containing one split piece.
+    with fitz.open(original) as doc:
+        for word in contract['splitTarget']:
+            for rect in doc[0].search_for(word):
+                doc[0].add_redact_annot(rect)
+        doc[0].apply_redactions()
+        doc.save(output, garbage=4, deflate=True)
+    oracle.verify_pdf(output, original, contract)
+    with fitz.open(output) as doc:
+        doc.set_metadata({'subject': 'RET'})
+        doc.save(bad, garbage=4, deflate=True)
+    with pytest.raises(AssertionError, match='Sensitive'):
+        oracle.verify_pdf(bad, original, contract)

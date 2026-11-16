@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import queue
 import signal
+import shutil
 import stat
 import subprocess
 import sys
@@ -20,6 +21,42 @@ def source_contract(root: Path):
     files["scripts/release-upstream.json"] = hashlib.sha256((root / "scripts/release-upstream.json").read_bytes()).hexdigest()
     return {"protocol": 1, "appVersion": json.loads((root / "package.json").read_text())["version"],
             "sourceSha256": hashlib.sha256(json.dumps(files, separators=(",", ":")).encode()).hexdigest()}
+
+
+def worker_environment(directory: Path, generation: str):
+    environment = dict(os.environ, PDF_DESENSITIZATION_TEMP_ROOT=str(directory),
+                       PDF_DESENSITIZATION_SESSION="synthetic", PDF_DESENSITIZATION_GENERATION=generation,
+                       TMPDIR=str(directory), TEMP=str(directory), TMP=str(directory), LOG_ENABLED="0")
+    environment.pop("TESSDATA_PREFIX", None)
+    environment["PATH"] = "/usr/bin:/bin"
+    return environment
+
+
+def source_ocr_identity(environment):
+    command = shutil.which("tesseract", path=environment["PATH"])
+    if command is None:
+        raise RuntimeError("Source worker OCR unavailable")
+    version = subprocess.run([command, "--version"], env=environment, capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()
+    languages = subprocess.run([command, "--list-langs"], env=environment, capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()
+    if not version or not languages:
+        raise RuntimeError("Source worker OCR identity unavailable")
+    return {"version": version[0], "languages": languages[1:],
+            "executableSha256": hashlib.sha256(Path(command).read_bytes()).hexdigest()}
+
+
+def sampled_rss(snapshot, exited):
+    """Return None only when an owned worker has already stopped."""
+    values = snapshot.stdout.split()
+    if snapshot.returncode != 0 or not values:
+        if exited:
+            return None
+        raise ValueError("Failed live process-group RSS sample")
+    if not all(value.isascii() and value.isdigit() for value in values):
+        raise ValueError("Invalid RSS sample")
+    total = sum(int(value) for value in values) * 1024
+    if total <= 0:
+        raise ValueError("Empty RSS sample")
+    return total
 
 
 class FrozenWorker:
@@ -50,14 +87,12 @@ class FrozenWorker:
         self.peak_temp_bytes = 0
         self.peak_png_count = 0
         self.sample_errors = 0
+        self.successful_samples = 0
         self.stderr_bytes = 0
         self.closed = False
         self.sampling = threading.Event()
-        environment = dict(os.environ, PDF_DESENSITIZATION_TEMP_ROOT=str(self.directory),
-                           PDF_DESENSITIZATION_SESSION="synthetic", PDF_DESENSITIZATION_GENERATION=self.generation,
-                           TMPDIR=str(self.directory), TEMP=str(self.directory), TMP=str(self.directory), LOG_ENABLED="0")
-        environment.pop("TESSDATA_PREFIX", None)
-        environment["PATH"] = environment.get("SystemRoot", r"C:\Windows") + r"\System32" if os.name == "nt" else "/usr/bin:/bin"
+        environment = worker_environment(self.directory, self.generation)
+        self.source_ocr = source_ocr_identity(environment) if self.mode == "source" else None
         started = time.monotonic()
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment, start_new_session=os.name != "nt")
@@ -76,9 +111,13 @@ class FrozenWorker:
                 if os.name != "nt":
                     try:
                         snapshot = subprocess.run(["/bin/ps", "-o", "rss=", "-g", str(self.process.pid)], capture_output=True, text=True, timeout=2)
-                        self.peak_rss = max(self.peak_rss, sum(int(value) for value in snapshot.stdout.split() if value.isdigit()) * 1024)
+                        rss = sampled_rss(snapshot, self.process.poll() is not None)
+                        if rss is None:
+                            break
                         size, pngs = 0, 0
-                        for root, _, names in os.walk(self.directory, followlinks=False):
+                        def fail_walk(error):
+                            raise error
+                        for root, _, names in os.walk(self.directory, followlinks=False, onerror=fail_walk):
                             for name in names:
                                 try:
                                     info = (Path(root) / name).lstat()
@@ -87,12 +126,16 @@ class FrozenWorker:
                                 if stat.S_ISREG(info.st_mode):
                                     size += info.st_size
                                     pngs += int(name.lower().endswith('.png'))
+                        self.successful_samples += 1
+                        self.peak_rss = max(self.peak_rss, rss)
                         self.peak_temp_bytes = max(self.peak_temp_bytes, size)
                         self.peak_png_count = max(self.peak_png_count, pngs)
-                    except (OSError, subprocess.TimeoutExpired):
+                    except (OSError, subprocess.TimeoutExpired, ValueError):
                         self.sample_errors += 1
-        for target in (read, errors, sample):
+        for target in (read, errors):
             threading.Thread(target=target, daemon=True).start()
+        self.sample_thread = threading.Thread(target=sample, daemon=True)
+        self.sample_thread.start()
         try:
             ready = self.messages.get(timeout=60)
             if ready != {"type": "ready", **self.manifest["contract"]}:
@@ -144,6 +187,7 @@ class FrozenWorker:
                     self.process.wait(timeout=10)
         finally:
             self.sampling.set()
+            self.sample_thread.join(timeout=5)
         self.exit_ms = round((time.monotonic() - started) * 1000)
         if os.name != "nt":
             try:
@@ -157,8 +201,11 @@ class FrozenWorker:
         self.closed = True
 
     def summary(self):
-        return {"readyMs": self.ready_ms, "exitMs": self.exit_ms, "peakOwnedTreeRssMiB": round(self.peak_rss / 1024 ** 2, 1),
+        valid = self.successful_samples > 0 and self.sample_errors == 0 and not self.sample_thread.is_alive()
+        return {"readyMs": self.ready_ms, "exitMs": self.exit_ms, "peakOwnedTreeRssMiB": round(self.peak_rss / 1024 ** 2, 1) if self.successful_samples else None,
                 "rssMethod": "sum of owned POSIX group RSS sampled every 100ms; shared pages may be counted twice" if os.name != "nt" else "unavailable",
                 "treeStopped": self.closed, "stderrBytes": self.stderr_bytes, "mode": self.mode,
-                "peakSampledTempBytes": self.peak_temp_bytes, "peakSampledPngCount": self.peak_png_count,
-                "sampleErrors": self.sample_errors}
+                "peakSampledTempBytes": self.peak_temp_bytes if self.successful_samples else None,
+                "peakSampledPngCount": self.peak_png_count if self.successful_samples else None,
+                "sampleErrors": self.sample_errors, "successfulSamples": self.successful_samples,
+                "resourceObservationValid": valid, "sourceOcr": self.source_ocr}

@@ -8,7 +8,6 @@ import platform
 import random
 import shutil
 import sys
-import subprocess
 import time
 import zipfile
 
@@ -102,9 +101,6 @@ def benchmark(args):
               "platform": platform.platform(), "machine": platform.machine(), "pythonHarness": platform.python_version(),
               "binarySha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "workloads": [], "verified": False,
               "method": "one fresh process per workload; OS caches uncontrolled; synthetic A4 pages; default chi_sim+eng OCR; RSS includes shared-page double counting"}
-    if args.source:
-        report["sourceOcrVersion"] = subprocess.run(["tesseract", "--version"], capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()[0]
-        report["sourceOcrLanguages"] = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, check=True, timeout=20).stdout.splitlines()[1:]
     for kind, contract in contracts.items():
         worker = None
         record = {"kind": kind, "pageCount": contract["pageCount"], "inputBytes": contract["inputBytes"], "sourceSha256": contract["sha256"]}
@@ -112,6 +108,8 @@ def benchmark(args):
         try:
             worker = FrozenWorker(binary, args.output_directory / (kind + "-worker"), source_root=source_root)
             record["contract"] = worker.manifest["contract"]
+            if args.source:
+                record["sourceOcr"] = worker.source_ocr
             if expected_source is not None and record["contract"] != expected_source:
                 raise RuntimeError("Source backend changed during benchmark")
             uploaded, upload_ms = worker.request("upload", {"file_path": str((fixtures / (kind + ".pdf")).resolve())}, timeout=600)
@@ -167,6 +165,8 @@ def benchmark(args):
         if not record.get("verified"):
             break
     report["verified"] = len(report["workloads"]) == 3 and all(item.get("verified") for item in report["workloads"])
+    report["resourceObservationValid"] = report["verified"] and all(
+        item.get("worker", {}).get("resourceObservationValid") is True for item in report["workloads"])
     (args.output_directory / "report.json").write_text(json.dumps(report, indent=2))
     return report
 
