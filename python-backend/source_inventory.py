@@ -66,9 +66,22 @@ def verify_runtime_sources(root: Path, analyzed_sources: Iterable[str]) -> None:
     analyzed = {Path(source).resolve() for source in analyzed_sources}
     # The native build entry is build-only; any future build-only modules need an explicit exception.
     expected = [name for name in python_sources(root) if name != "python-backend/build_backend.py"]
+    expected_paths = {(root / name).resolve() for name in expected}
     missing = [name for name in expected if (root / name).resolve() not in analyzed]
     if missing:
         raise RuntimeError("Backend modules missing from PyInstaller Analysis: " + ", ".join(missing))
+    base = (root / "python-backend").resolve()
+    # A selected virtual environment can live in an excluded directory. Its
+    # installed dependencies are covered separately by the build/notice checks.
+    environments = {Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()}
+    local_environments = {environment for environment in environments
+                          if environment != base and environment.is_relative_to(base)
+                          and environment.relative_to(base).parts[0].lower() in {"venv", "env", ".venv"}}
+    unexpected = sorted(source.relative_to(base).as_posix() for source in analyzed
+                        if source.is_relative_to(base) and source not in expected_paths
+                        and not any(source.is_relative_to(environment) for environment in local_environments))
+    if unexpected:
+        raise RuntimeError("Unlisted backend modules in PyInstaller Analysis: " + ", ".join(unexpected))
 
 
 def check_types(root: Path) -> int:

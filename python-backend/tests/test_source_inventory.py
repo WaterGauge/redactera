@@ -157,3 +157,16 @@ def test_typecheck_and_analysis_discover_nested_modules(source, monkeypatch):
     with pytest.raises(RuntimeError, match="ocr/provider.py"):
         inventory.verify_runtime_sources(source, analyzed)
     inventory.verify_runtime_sources(source, [*analyzed, str(nested)])
+
+
+def test_analysis_rejects_excluded_project_code_but_allows_selected_environment(source, monkeypatch):
+    excluded = put(source, "python-backend/tests/helpers.py")
+    build_only = put(source, "python-backend/build_backend.py")
+    dependency = put(source, "python-backend/venv/lib/site-packages/dependency.py")
+    other = put(source, "python-backend/env/lib/site-packages/unselected.py")
+    monkeypatch.setattr(inventory.sys, "prefix", str(source / "python-backend/venv"))
+    analyzed = [str(source / "python-backend" / name) for name in ("main.py", "build_info.py")]
+    inventory.verify_runtime_sources(source, [*analyzed, str(dependency)])
+    for unexpected in (excluded, build_only, other):
+        with pytest.raises(RuntimeError, match="Unlisted backend modules"):
+            inventory.verify_runtime_sources(source, [*analyzed, str(unexpected)])
