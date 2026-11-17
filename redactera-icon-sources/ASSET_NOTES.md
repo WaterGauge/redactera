@@ -13,8 +13,10 @@ in `cleanup-prompts.json`. The white document, fold and red wrap remain the appr
 artwork. The Windows shadow/edge alpha is reconstructed; the original RGB concept
 cannot provide its lost alpha channel losslessly.
 
-Use Python 3.11 and the existing `Pillow==11.1.0` pin in
-`python-backend/requirements.txt`. No new image-processing dependency is needed.
+Use a separate Python 3.11 virtual environment with `scripts/icon-requirements.txt`
+(`Pillow==11.1.0`) solely to reproduce the reviewed, version-controlled artwork.
+Do not install these icon-only dependencies into the backend environment or use
+this tool to decode user documents or arbitrary images.
 
 ```sh
 npm run icons:generate
@@ -22,9 +24,8 @@ npm run icons:check
 npm run icons:verify
 ```
 
-The generator uses `PDF_BUILD_PYTHON` when set, otherwise `python3` on macOS and
-`python` on Windows. Set it to the Python environment containing the pinned project
-dependencies. The check command is Node-only. The verify command rebuilds all bytes
+Set `PDF_ICON_PYTHON` to the isolated icon environment interpreter. The generator
+falls back to `PDF_BUILD_PYTHON` and then `python3` on macOS or `python` on Windows. The check command is Node-only. The verify command rebuilds all bytes
 in memory and compares the committed files without modifying them.
 
 | Output | Used by |

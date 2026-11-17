@@ -127,6 +127,13 @@ def write_python_notices(run: Path, project_license: Path, openssl_license: Path
     return sha256(destination)
 
 
+def verify_frozen_dependencies(check: dict[str, Any], upstream: dict[str, Any], tools: dict[str, str]) -> None:
+    expected = {"pymupdf": upstream["pymupdfVersion"], "mupdf": upstream["mupdfVersion"],
+                "requests": tools["requests"], "pillow": tools["Pillow"]}
+    if any(check.get(name) != version for name, version in expected.items()):
+        raise RuntimeError("Frozen PDF engine, HTTP client or image decoder does not match the build environment")
+
+
 def build() -> None:
     root = Path(__file__).resolve().parent.parent
     if sys.platform not in ("darwin", "win32"):
@@ -184,9 +191,7 @@ def build() -> None:
     check = json.loads(result.stdout)
     if check.get("contract") != identity or check.get("frozen") is not True or source_contract() != identity or ocr_resources()["sha256"] != resources["sha256"]:
         raise RuntimeError("Build inputs or actual frozen identity changed")
-    if (check.get("pymupdf") != upstream["pymupdfVersion"] or check.get("mupdf") != upstream["mupdfVersion"]
-            or check.get("requests") != tools["requests"]):
-        raise RuntimeError("Frozen PDF engine or HTTP client does not match the build environment")
+    verify_frozen_dependencies(check, upstream, tools)
     if any(check.get(name) != version for name, version in runtime.items()):
         raise RuntimeError("Frozen Python or OpenSSL does not match the build environment")
     openssl_license = root / "python-backend/openssl-license.txt" if runtime["openssl"] == pinned_runtime["openssl"] else None

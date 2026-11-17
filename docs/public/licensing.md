@@ -3,7 +3,7 @@
 页隐项目源码采用 [GNU AGPLv3](../../LICENSE)（AGPL-3.0-only）。第三方运行时、PDF 引擎、OCR 工具和字体继续适用各自的许可。
 
 - PDF 处理使用 PyMuPDF 和 MuPDF。上游提供 AGPLv3 与商业许可，所用 PyMuPDF 源码版本附带 AGPLv3 文本。[PyMuPDF 许可说明](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright) · [PyMuPDF 1.28.2 的许可文本](https://github.com/pymupdf/PyMuPDF/blob/1.28.2/COPYING)
-- 桌面运行时包含 Electron 及其 Chromium、Node.js 等依赖。运行时的许可声明以 Electron 对应版本的发行内容为准。[Electron 许可](https://github.com/electron/electron/blob/v45.2.1/LICENSE)
+- 桌面运行时包含 Electron 及其 Chromium、Node.js 等依赖。运行时的许可声明以 Electron 对应版本的发行内容为准。[Electron 许可](https://github.com/electron/electron/blob/v45.3.3/LICENSE)
 - 预览使用 PDF.js。其主代码采用 Apache 2.0，随附的字体、CMap 和解码资源有各自的声明文件。[PDF.js 源码及许可](https://github.com/mozilla/pdf.js)
 - 本地 OCR 使用 Tesseract 和语言模型。Tesseract 主项目采用 Apache 2.0，模型与平台动态库的许可按实际构建资源核对。[Tesseract 许可](https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE) · [语言模型](https://github.com/tesseract-ocr/tessdata)
 - 界面字体 DM Sans 与 IBM Plex Sans 采用 SIL Open Font License 1.1。[DM Sans](https://github.com/googlefonts/dm-fonts) · [IBM Plex](https://github.com/IBM/plex)

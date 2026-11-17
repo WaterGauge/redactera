@@ -26,7 +26,7 @@ function applicationSource(root) {
   const configuration = ['package.json', 'package-lock.json', 'forge.config.ts', 'webpack.main.config.ts',
     'webpack.renderer.config.ts', 'webpack.rules.ts', 'webpack.plugins.ts', 'webpack.pdf-assets.ts',
     'tsconfig.json', 'tsconfig.e2e.json', 'tsconfig.build.json', 'LICENSE', 'CHANGELOG.md',
-    'assets/icon.icns', 'assets/icon.ico', 'assets/icon-manifest.json',
+    'scripts/icon-requirements.txt', 'assets/icon.icns', 'assets/icon.ico', 'assets/icon-manifest.json',
     'assets/redactera-macos.png', 'assets/redactera-windows.png', 'assets/installer.gif',
     'redactera-icon-sources/redactera-macos-source.png', 'redactera-icon-sources/redactera-windows-source.png',
     'redactera-icon-sources/redactera-macos-cutout.png', 'redactera-icon-sources/redactera-windows-cutout.png'];

@@ -81,7 +81,16 @@ jobs:
         run: brew install tesseract
 
       - name: Verify generated application icons
-        run: python scripts/generate-icons.py --check
+        run: |
+          icon_venv="$(mktemp -d)"
+          python -m venv "$icon_venv"
+          if [ "$RUNNER_OS" = Windows ]; then
+            icon_python="$icon_venv/Scripts/python.exe"
+          else
+            icon_python="$icon_venv/bin/python"
+          fi
+          "$icon_python" -m pip install -r scripts/icon-requirements.txt
+          "$icon_python" scripts/generate-icons.py --check
         shell: bash
 
       - name: Prepare pinned OCR languages for source workflow

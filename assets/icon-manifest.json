@@ -15,7 +15,7 @@
     "redactera-icon-sources/redactera-windows-source.png": "c1a57353c56d278a92e7658ab3a0a81a8ffbf0958af3558c64eb2148949a299d",
     "redactera-icon-sources/redactera-macos-cutout.png": "86818345c14aaea6a5f5893c5639a061867a550868c55cc9076cd36f684fd390",
     "redactera-icon-sources/redactera-windows-cutout.png": "6e63d0c0329876b58533ac751e6334544302a49931dbce625b009b07bd76d139",
-    "scripts/generate-icons.py": "bd6dfce9747b1e95f31ed0a4b0f47e83a40669d5f301cce364691c15d9180eb1"
+    "scripts/generate-icons.py": "37c0b1caccd61d06b86828970250354340ffdf0d8e0234404013a9d32c78af93"
   },
   "outputs": {
     "assets/redactera-macos.png": "a40eea69e75f21f9ba01a88de8b9d5d997fc22326dfaa48e184c33ad44c078ba",

@@ -127,3 +127,15 @@ def test_frozen_self_check_refuses_missing_language_data(tmp_path, monkeypatch):
     monkeypatch.setattr(build_info.sys, "_MEIPASS", str(tmp_path), raising=False)
     with pytest.raises(RuntimeError, match="language is missing"):
         build_info.self_check()
+
+
+def test_frozen_dependency_identity_rejects_missing_or_old_pillow():
+    upstream = {"pymupdfVersion": "1.28.2", "mupdfVersion": "1.28.2"}
+    tools = {"requests": "2.34.2", "Pillow": "13.0.0"}
+    check = {"pymupdf": "1.28.2", "mupdf": "1.28.2", "requests": "2.34.2", "pillow": "13.0.0"}
+    build_backend.verify_frozen_dependencies(check, upstream, tools)
+    for name in check:
+        with pytest.raises(RuntimeError, match="does not match"):
+            build_backend.verify_frozen_dependencies({key: value for key, value in check.items() if key != name}, upstream, tools)
+        with pytest.raises(RuntimeError, match="does not match"):
+            build_backend.verify_frozen_dependencies({**check, name: "0.0.0"}, upstream, tools)

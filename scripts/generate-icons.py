@@ -12,7 +12,7 @@ import sys
 from PIL import Image, ImageDraw, __version__ as pillow_version
 
 ROOT = Path(__file__).resolve().parent.parent
-PINNED_PILLOW = '11.1.0'  # Already pinned by python-backend/requirements.txt.
+PINNED_PILLOW = '11.1.0'  # Isolated icon-only environment: scripts/icon-requirements.txt.
 ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 ICNS_SIZES = {'icp4': 16, 'ic11': 32, 'icp5': 32, 'ic12': 64,
               'ic07': 128, 'ic13': 256, 'ic08': 256, 'ic14': 512,
@@ -117,7 +117,7 @@ def installer_animation(image: Image.Image) -> bytes:
 
 def outputs() -> tuple[dict[str, bytes], dict]:
     if pillow_version != PINNED_PILLOW:
-        raise ValueError(f'Use Pillow {PINNED_PILLOW}; install the existing pinned Python requirements')
+        raise ValueError(f'Use Pillow {PINNED_PILLOW}; use the isolated scripts/icon-requirements.txt environment')
     mac, windows = master('macos'), master('windows')
     mac_png, windows_png = frame(mac, 1024, 0.82), frame(windows, 1024, 0.90)
     win_frames = {size: frame(windows, size, 0.90) for size in ICO_SIZES}

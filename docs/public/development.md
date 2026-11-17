@@ -1,6 +1,6 @@
 # 开发与构建
 
-项目使用Electron45.2.1、React19、TypeScript5、Python3.11和PyMuPDF。构建工具为Node24、Electron Forge8与PyInstaller6.19.0。Windows与macOS分别使用本机原生工具构建，不能复用另一平台的后端、node_modules或Python虚拟环境。
+项目使用Electron45.3.3、React19、TypeScript5、Python3.11和PyMuPDF。构建工具为Node24、Electron Forge8与PyInstaller6.22.3。Windows与macOS分别使用本机原生工具构建，不能复用另一平台的后端、node_modules或Python虚拟环境。
 
 准备 Node 24、Python 3.11 和 Tesseract 5.5.4 或更新版本，确认 eng、chi_sim、chi_tra 语言数据可用。创建项目 Python 虚拟环境，安装 python-backend/requirements.txt 中的固定依赖，再运行 npm ci。
 
@@ -34,4 +34,4 @@ Windows 原生后端使用系统的 Microsoft Visual C++ x64 运行库。如需�
 
 ## 图标资源
 
-双平台原图、透明母版与生成说明在 [redactera-icon-sources](../../redactera-icon-sources/ASSET_NOTES.md)。修改图标后运行 `npm run icons:generate`，再运行 `npm run icons:check` 和 `npm run icons:verify`。生成环境沿用项目锁定的 Pillow 11.1.0，可通过 `PDF_BUILD_PYTHON` 指定 Python。构建会校验源文件与各尺寸资源的一致性。
+双平台原图、透明母版与生成说明在 [redactera-icon-sources](../../redactera-icon-sources/ASSET_NOTES.md)。修改图标后运行 `npm run icons:generate`，再运行 `npm run icons:check` 和 `npm run icons:verify`。为保持已批准图标的原始字节，生成环境单独使用 `scripts/icon-requirements.txt` 中锁定的 Pillow 11.1.0，仅处理版本库中已审核的图标素材。使用独立 Python 虚拟环境并通过 `PDF_ICON_PYTHON` 指定其解释器；不要将此依赖装入运行时或冻结后端环境。构建会校验源文件与各尺寸资源的一致性。

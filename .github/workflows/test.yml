@@ -58,7 +58,17 @@ jobs:
           cd python-backend
           python -m pip install -r requirements.txt
       - name: Verify generated application icons
-        run: python scripts/generate-icons.py --check
+        run: |
+          icon_venv="$(mktemp -d)"
+          python -m venv "$icon_venv"
+          if [ "$RUNNER_OS" = Windows ]; then
+            icon_python="$icon_venv/Scripts/python.exe"
+          else
+            icon_python="$icon_venv/bin/python"
+          fi
+          "$icon_python" -m pip install -r scripts/icon-requirements.txt
+          "$icon_python" scripts/generate-icons.py --check
+        shell: bash
       - name: Run mypy
         run: cd python-backend && python -m mypy --config-file mypy.ini main.py pdf_processor.py request_context.py diagnostics.py paddle_http.py build_info.py build_backend.py windows_lifecycle.py
       - name: Run Python tests with coverage (macOS)
