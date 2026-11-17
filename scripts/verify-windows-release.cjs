@@ -7,6 +7,7 @@ const { createRequire } = require('node:module');
 const extractZip = require('extract-zip');
 const yauzl = createRequire(require.resolve('extract-zip'))('yauzl');
 const { verifyPackage } = require('./backend-contract.cjs');
+const { verifyWindowsPayload } = require('./application-payload.cjs');
 const { verifyIcons } = require('./check-icons.cjs');
 const { verifyPackageNotices } = require('./package-notices.cjs');
 const { executableIdentity } = require('./prepare-windows-icons.cjs');
@@ -109,9 +110,13 @@ async function verifyIcon(file) {
 async function verify(output, setup, prepared, launcherTemplate) {
   verifyIcons(root);
   const evidence = await verifyPackage(root, output, 'win32', 'x64', 'normal', false);
+  const applicationPayloadSha256 = verifyWindowsPayload(root, output, evidence).payloadSha256;
   if (path.basename(setup) !== pkg.branding.name + '-' + pkg.version + ' Setup.exe') throw Error('Installer filename does not match this version');
   const before = hashFile(setup);
   const recorded = prepared == null ? JSON.parse(fs.readFileSync(installerEvidencePath(before), 'utf8')) : null;
+  if (recorded && recorded.applicationPayloadSha256 !== applicationPayloadSha256) {
+    throw Error('Installer evidence refers to a different common application payload.');
+  }
   const windowsInstaller = verifyBuildProof(prepared ?? recorded?.windowsInstaller);
   const { NtExecutable } = await import('resedit');
   const finalLauncher = executableIdentity(NtExecutable.from(fs.readFileSync(setup), { ignoreCert: true }));
@@ -176,8 +181,11 @@ async function verify(output, setup, prepared, launcherTemplate) {
     for (const file of [setup, path.join(output, 'Redactera.exe'), path.join(payload, 'Squirrel.exe'),
       path.join(payload, 'Redactera_ExecutionStub.exe')]) iconGroups += await verifyIcon(file);
     if (hashFile(setup) !== before) throw Error('Installer changed during verification');
+    if (verifyWindowsPayload(root, output, evidence).payloadSha256 !== applicationPayloadSha256) {
+      throw Error('Application payload changed during installer verification.');
+    }
     return { verified: true, installerSha256: before, applicationSourceSha256: evidence.appBuild.applicationSourceSha256,
-      asarSha256: evidence.asarSha256, embeddedFiles: embedded, projectIconsVerified: 4, projectIconGroupsVerified: iconGroups,
+      asarSha256: evidence.asarSha256, applicationPayloadSha256, embeddedFiles: embedded, projectIconsVerified: 4, projectIconGroupsVerified: iconGroups,
       installerAnimationVerified: true, fullPackageSha256, rawZipEntries, nugetManifestVerified: true,
       launcherIdentity: finalLauncher, windowsInstaller };
   } finally { fs.rmSync(work, { recursive: true, force: true }); }

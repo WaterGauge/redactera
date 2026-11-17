@@ -174,7 +174,25 @@ jobs:
         env:
           PDF_TESSDATA_DIR: ${{ github.workspace }}/.project-state/ocr-data
 
-      - name: Build Electron app with electron-forge
+      - name: Build normal Windows application payload
+        if: runner.os == 'Windows'
+        run: npm run package
+        shell: bash
+        env:
+          ELECTRON_ENABLE_NODE_CLI_INSPECT_ARGUMENTS: 'false'
+          PDF_TESSDATA_DIR: ${{ github.workspace }}/.project-state/ocr-data
+
+      - name: Make Windows installer from the sealed application payload
+        if: runner.os == 'Windows'
+        run: npm run make -- --from-package
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_ENABLE_NODE_CLI_INSPECT_ARGUMENTS: 'false'
+          PDF_TESSDATA_DIR: ${{ github.workspace }}/.project-state/ocr-data
+
+      - name: Build Electron app with electron-forge (macOS)
+        if: runner.os == 'macOS'
         run: npm run make
         shell: bash
         env:
@@ -206,6 +224,7 @@ jobs:
             .project-state/backend-builds/latest.json
             .project-state/backend-builds/run-*/self-check-*.txt
             .project-state/windows-installer/evidence/*.json
+            .project-state/application-payload/*.json
           include-hidden-files: true
 
       - name: Stage macOS installer for joint release

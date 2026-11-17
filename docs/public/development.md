@@ -24,7 +24,7 @@ Windows x64 的 `npm run make` 使用 Git 和原生 Python 3.11 构建原生启�
 
 Windows可通过WSL调度原生node.exe和python.exe；先运行python3 scripts/windows-wsl-audit.py做只读环境核验。该脚本只确认环境，不证明Windows桌面GUI已通过。副本应放Windows文件系统的独立目录，传给exe的路径先转换并核对；Linux或WSLg应用结果不算Windows原生验证。
 
-package/make会重新构建后端并执行资源与三语言自检；后端版本、协议、源码摘要或打包资源不匹配时拒绝继续。正式包关闭Node调试入口，不包含E2E宿主。Windows安装包需在Windows本机构建；macOS安装包需在对应架构Mac构建。
+默认 package/make 会重新构建后端并执行资源与三语言自检；后端版本、协议、源码摘要或打包资源不匹配时拒绝继续。正式包关闭Node调试入口，不包含E2E宿主。Windows安装包需在Windows本机构建；macOS安装包需在对应架构Mac构建。
 
 双平台 CI 使用 `scripts/release-upstream.json` 中锁定的 Python 和 OpenSSL。运行 `node scripts/prepare-release-python.cjs` 可将同一归档解包到项目的 `.project-state/release-python` 目录。命令输出的 `executable` 可用于设置 `PDF_BUILD_PYTHON`，发行构建同时设置 `PDF_REQUIRE_RELEASE_RUNTIME=1`。后端自检记录实际冻结的 Python、OpenSSL、PDF 引擎及 OCR 版本。
 
@@ -45,3 +45,9 @@ Python 与 Node 使用同一递归输入规则：对 `python-backend/` 中未排
 从后端目录运行 `python source_inventory.py --check-types`，对同一输入集合中的所有 Python 模块执行 mypy。冻结构建对 PyInstaller Analysis 实际收集的 Python 源文件逐项检查，当前仅原生构建入口 `build_backend.py` 是明确的构建专用模块例外。Analysis 同时拒绝未列入清单的项目模块及未声明的外部来源；只允许实际解释器标准库与其选定库目录内由已安装发行包记录的源文件，不将整个虚拟环境视为可信来源。Windows Node 枚举还须与原生 Python 枚举一致，后者检查 Windows 文件属性。新增动态导入、模型、词表、原生库等资源仍需显式核对冻结配置、实际产物、许可与来源；源码摘要不能替代资源打包与成品验证。
 
 正式构建设置 `PDF_REQUIRE_RELEASE_RUNTIME=1`，以 `PDF_RELEASE_SOURCE_COMMIT`（未指定时为起始 HEAD）固定源码提交；参与身份的文件必须属于该提交，实际工作树及 Git 对应源码归档的全部跟踪字节必须一致。正式构建前后与发布归档准备时检查，未跟踪或被忽略的生产输入、Git 导出转换或字节不一致即失败。普通开发及无 Git 的公开源码归档构建不启用正式发行门禁，仍保留原有身份及资源检查。
+
+## Windows 共同应用构建与安装器分离
+
+原生 Windows x64 可先运行 `npm run package` 生成正常应用，再运行 `npm run make -- --from-package` 使用同一份应用目录制作现有安装器，不重新构建后端或应用。默认 `npm run make` 仍可完整构建。测试版不能用于安装器。正常应用通过原打包校验后，构建在 `.project-state/application-payload/` 按 buildId 写入独立的共同应用回执，包含相对路径、目录、所有普通文件的大小及 SHA256、应用/后端/许可身份；正式发行额外绑定固定源码提交。该回执不得随意修改、重建或放入应用目录。制作安装器前及复查时重新核对实际应用和回执，缺失或不同即失败并要求重新构建；E2E、其他架构和跨平台复用拒绝。正式复查须保持原正式构建模式和固定提交。
+
+共同应用摘要是构建输入身份，不是签名、实际安装目录完整性、ACL 或 NTFS 附加数据流审计。当前仍使用既有 Squirrel 安装器和实际完整包、更新器、图标验证；其封装文件集合不等同整个 Forge 输出目录。应用和回执目录必须为受控且无并发写入的构建目录。此阶段不生成或启用商店安装包，也不改变应用安装身份、数据目录、更新方式或 macOS 构建。

@@ -37,7 +37,13 @@ const { applicationSource, verify, preparePackageBackend, verifyPackage, package
   preparePackageBackend(root: string, platform: string, arch: string): void;
   packagedAppName(metadata: typeof pkg, platform: string, flavor: string): string;
   macBundleNames(branding: typeof pkg.branding, localization: string, flavor: string): string;
-  verifyPackage(root: string, output: string, platform: string, arch: string, flavor: string): Promise<Record<string, unknown>>;
+  verifyPackage(root: string, output: string, platform: string, arch: string, flavor: string, currentDist?: boolean): Promise<Record<string, unknown>>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { sealWindowsPayload, verifyWindowsPayload } = require('./scripts/application-payload.cjs') as {
+  sealWindowsPayload(root: string, output: string, evidence: Record<string, unknown>): { payloadSha256: string };
+  verifyWindowsPayload(root: string, output: string, evidence: Record<string, unknown>): { payloadSha256: string };
 };
 
 const enableNodeCliInspectArguments =
@@ -129,6 +135,10 @@ const config: ForgeConfig = {
     preMake: async () => {
       if (testBuild) throw new Error('E2E test packages cannot be made into release installers.');
       if (process.platform === 'win32') {
+        if (process.arch !== 'x64') throw new Error('Windows installers require the native x64 application payload.');
+        const output = path.join(__dirname, 'out', `${appName}-win32-x64`);
+        const evidence = await verifyPackage(__dirname, output, 'win32', 'x64', 'normal', false);
+        verifyWindowsPayload(__dirname, output, evidence);
         execFileSync(process.env.PDF_BUILD_PYTHON || 'python',
           [path.join(__dirname, 'scripts/windows-installer/build.py'), windowsInstallerBuild],
           { cwd: __dirname, stdio: 'inherit', timeout: 900_000 });
@@ -165,6 +175,9 @@ const config: ForgeConfig = {
           delete storedEvidence.resources;
         }
         fs.writeFileSync(path.join(output, 'build-evidence.json'), JSON.stringify(storedEvidence, null, 2));
+        if (!testBuild && result.platform === 'win32' && result.arch === 'x64') {
+          sealWindowsPayload(__dirname, output, storedEvidence);
+        }
       }
     },
   },
