@@ -127,9 +127,34 @@ def checked_identity(proof):
     return build
 
 
-def receipt(project, output, proof, mode):
+def squirrel_payload_files(common, packaged):
+    # electron-winstaller's pinned template omits these Forge-root-only files.
+    # Chromium's notice must still be present byte-for-byte inside resources.
+    omitted = {'build-evidence.json', 'version', 'LICENSES.chromium.html'}
+    expected = {name: value for name, value in common.items() if name not in omitted}
+    if 'LICENSES.chromium.html' in common:
+        require(expected.get('resources/third-party-licenses/electron/LICENSES.chromium.html') ==
+                common['LICENSES.chromium.html'], 'Chromium license copy differs from the common payload')
+    # The maker adds the verified updater and execution stub; their own
+    # identity/icon checks remain in verify-windows-release.cjs.
+    extras = {'squirrel.exe', 'redactera_executionstub.exe'}
+    folded = {name.casefold(): (name, value) for name, value in packaged.items()}
+    require(len(folded) == len(packaged), 'Case-colliding embedded application files')
+    require(not extras.intersection(name.casefold() for name in expected), 'Unexpected installer-only file in common application')
+    require(set(folded) == {name.casefold() for name in expected} | extras,
+            'Installer embedded file set differs from the common application')
+    for name, value in expected.items():
+        actual_name, actual = folded[name.casefold()]
+        require(actual_name == name and actual == value, 'Installer embeds a different application file: ' + name)
+    for name in extras:
+        require(folded[name][1]['size'] > 0, 'Empty installer-only application file')
+    return {name: value['sha256'] for name, value in sorted(packaged.items())}
+
+
+def receipt(project, output, proof, mode, embedded=None):
     build = checked_identity(proof)
-    require(mode in ('seal', 'verify'), 'Invalid application payload mode')
+    require(mode in ('seal', 'verify', 'verify-squirrel') and (embedded is not None) == (mode == 'verify-squirrel'),
+            'Invalid application payload mode')
     ordinary_directory(project)
     # No receipt is allowed inside the payload, even when using a custom output directory.
     state = project / '.project-state' / 'application-payload'
@@ -169,12 +194,16 @@ def receipt(project, output, proof, mode):
         ordinary_directory(state)
         _, _, saved = file_value(state / (build['buildId'] + '.json'), True)
         require(saved == raw + b'\n', 'Application payload receipt differs from the verified build; rebuild the application')
-    return {'payloadSha256': result['payloadSha256'], 'files': len(files), 'directories': len(content['directories'])}
+    summary = {'payloadSha256': result['payloadSha256'], 'files': len(files), 'directories': len(content['directories'])}
+    if mode == 'verify-squirrel':
+        summary['embeddedFiles'] = squirrel_payload_files(files, snapshot(embedded)['files'])
+    return summary
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        raise SystemExit('Usage: application-payload.py seal|verify PROJECT OUTPUT (package evidence JSON on stdin)')
+    if len(sys.argv) not in (4, 5):
+        raise SystemExit('Usage: application-payload.py seal|verify|verify-squirrel PROJECT OUTPUT [EMBEDDED] (package evidence JSON on stdin)')
     # Resolve neither path through links; the scanner rejects reparse points.
-    root, output = (Path(os.path.abspath(value)) for value in sys.argv[2:])
-    print(json.dumps(receipt(root, output, json.load(sys.stdin), sys.argv[1])))
+    root, output = (Path(os.path.abspath(value)) for value in sys.argv[2:4])
+    embedded = Path(os.path.abspath(sys.argv[4])) if len(sys.argv) == 5 else None
+    print(json.dumps(receipt(root, output, json.load(sys.stdin), sys.argv[1], embedded)))

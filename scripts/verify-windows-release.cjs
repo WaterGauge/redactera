@@ -7,7 +7,7 @@ const { createRequire } = require('node:module');
 const extractZip = require('extract-zip');
 const yauzl = createRequire(require.resolve('extract-zip'))('yauzl');
 const { verifyPackage } = require('./backend-contract.cjs');
-const { verifyWindowsPayload } = require('./application-payload.cjs');
+const { verifyWindowsPayload, verifySquirrelPayload } = require('./application-payload.cjs');
 const { verifyIcons } = require('./check-icons.cjs');
 const { verifyPackageNotices } = require('./package-notices.cjs');
 const { executableIdentity } = require('./prepare-windows-icons.cjs');
@@ -49,6 +49,8 @@ function verifyFullPackageEntries(bytes) {
       if (error) return reject(error);
       const relationships = Buffer.from('_rels/.rels');
       let relationshipEntries = 0;
+      const paths = new Map();
+      const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
       const fail = reason => { zip.close(); reject(reason); };
       zip.once('error', fail);
       zip.once('end', () => {
@@ -61,7 +63,30 @@ function verifyFullPackageEntries(bytes) {
         if (!(entry.generalPurposeBitFlag & 0x800) && entry.fileName.some(byte => byte > 0x7f)) {
           return fail(Error('Windows full package has a non-ASCII ZIP entry without UTF-8 encoding.'));
         }
-        if (entry.fileName.equals(relationships)) relationshipEntries++;
+        try {
+          const name = utf8.decode(entry.fileName);
+          const directory = name.endsWith('/');
+          const parts = (directory ? name.slice(0, -1) : name).split('/');
+          if (parts.some(part => !part || part === '.' || part === '..' || /[<>:\"|?*\x00-\x1f]/.test(part) ||
+              /[ .]$/.test(part) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(part.split('.')[0].trimEnd()))) {
+            throw Error('Windows full package contains an invalid path.');
+          }
+          const kind = (entry.externalFileAttributes >>> 16) & 0xf000;
+          if ((entry.versionMadeBy >>> 8) === 3 && kind !== 0 && kind !== (directory ? 0x4000 : 0x8000) ||
+              directory && entry.uncompressedSize !== 0) throw Error('Windows full package contains a non-regular entry.');
+          for (let i = 0; i < parts.length; i++) {
+            const spelling = parts.slice(0, i + 1).join('/');
+            const key = spelling.toLowerCase();
+            const explicit = i === parts.length - 1;
+            const isDirectory = !explicit || directory;
+            const previous = paths.get(key);
+            if (previous && (previous.spelling !== spelling || previous.directory !== isDirectory || explicit && previous.explicit)) {
+              throw Error('Windows full package contains duplicate or conflicting paths.');
+            }
+            paths.set(key, { spelling, directory: isDirectory, explicit: explicit || Boolean(previous?.explicit) });
+          }
+          if (entry.fileName.equals(relationships)) relationshipEntries++;
+        } catch (error) { return fail(error); }
         zip.readEntry();
       });
       zip.readEntry();
@@ -169,13 +194,10 @@ async function verify(output, setup, prepared, launcherTemplate) {
       throw Error('Setup and the application must embed the updater from the current Windows build.');
     }
     verifyPackageNotices(root, path.join(payload, 'resources'), 'win32');
-    const files = ['Redactera.exe', 'resources/app.asar', 'resources/app-build.json', 'resources/icon.ico',
-      'resources/dist/python_backend.exe', 'resources/LICENSE', 'resources/dist/python-licenses.zip'];
-    const embedded = {};
-    for (const file of files) {
-      const digest = hashFile(path.join(payload, file));
-      if (digest !== hashFile(path.join(output, file))) throw Error('Installer embeds a different application file: ' + file);
-      embedded[file] = digest;
+    const embedded = verifySquirrelPayload(root, output, evidence, payload);
+    if (embedded.payloadSha256 !== applicationPayloadSha256) throw Error('Installer application receipt changed during verification.');
+    if (recorded && JSON.stringify(recorded.embeddedFiles) !== JSON.stringify(embedded.embeddedFiles)) {
+      throw Error('Installer embedded file evidence has changed.');
     }
     let iconGroups = 0;
     for (const file of [setup, path.join(output, 'Redactera.exe'), path.join(payload, 'Squirrel.exe'),
@@ -185,7 +207,7 @@ async function verify(output, setup, prepared, launcherTemplate) {
       throw Error('Application payload changed during installer verification.');
     }
     return { verified: true, installerSha256: before, applicationSourceSha256: evidence.appBuild.applicationSourceSha256,
-      asarSha256: evidence.asarSha256, applicationPayloadSha256, embeddedFiles: embedded, projectIconsVerified: 4, projectIconGroupsVerified: iconGroups,
+      asarSha256: evidence.asarSha256, applicationPayloadSha256, embeddedFiles: embedded.embeddedFiles, projectIconsVerified: 4, projectIconGroupsVerified: iconGroups,
       installerAnimationVerified: true, fullPackageSha256, rawZipEntries, nugetManifestVerified: true,
       launcherIdentity: finalLauncher, windowsInstaller };
   } finally { fs.rmSync(work, { recursive: true, force: true }); }

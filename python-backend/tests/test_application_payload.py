@@ -259,3 +259,124 @@ for(const [args,platform,arch] of [[['package','--from-package'],'win32','x64'],
 assert.equal(run(['make','--from-package'],'win32','x64',false,1).exitCode,1);
 '''
     subprocess.run(['node', '-e', script, str(ROOT / 'scripts/build-app.cjs')], check=True)
+
+
+
+@pytest.fixture
+def squirrel(build):
+    project, output, proof, _ = build
+    write(output / 'LICENSES.chromium.html', b'chromium-notice')
+    write(output / 'resources/third-party-licenses/electron/LICENSES.chromium.html', b'chromium-notice')
+    write(output / 'version', b'45.2.1')
+    run(build, 'seal')
+    packaged = project / 'embedded'
+    shutil.copytree(output, packaged)
+    for name in ('build-evidence.json', 'version', 'LICENSES.chromium.html'):
+        (packaged / name).unlink()
+    write(packaged / 'squirrel.exe', b'updater')
+    write(packaged / 'Redactera_ExecutionStub.exe', b'stub')
+    return build, packaged
+
+
+def test_complete_embedded_application_comparison(squirrel):
+    build, packaged = squirrel
+    result = payload.receipt(*build[:3], 'verify-squirrel', packaged)
+    assert result['payloadSha256'] == run(build, 'verify')['payloadSha256']
+    assert result['embeddedFiles']['unlisted.dll'] == hashlib.sha256(b'unlisted.dll').hexdigest()
+    assert result['embeddedFiles']['squirrel.exe'] == hashlib.sha256(b'updater').hexdigest()
+    assert len(result['embeddedFiles']) == len([x for x in packaged.rglob('*') if x.is_file()])
+
+
+@pytest.mark.parametrize('name', ['unlisted.dll', 'locales/zh-CN.pak', 'resources/dist/backend-manifest.json',
+                                  'resources/third-party-licenses/electron/LICENSES.chromium.html', 'squirrel.exe', 'Redactera_ExecutionStub.exe'])
+def test_rejects_missing_embedded_files(squirrel, name):
+    build, packaged = squirrel
+    (packaged / name).unlink()
+    with pytest.raises(RuntimeError, match='file set differs'):
+        payload.receipt(*build[:3], 'verify-squirrel', packaged)
+
+
+@pytest.mark.parametrize('name', ['unlisted.dll', 'locales/zh-CN.pak', 'resources/dist/backend-manifest.json',
+                                  'resources/third-party-licenses/electron/LICENSES.chromium.html'])
+def test_rejects_changed_embedded_bytes(squirrel, name):
+    build, packaged = squirrel
+    (packaged / name).write_bytes(b'tampered')
+    with pytest.raises(RuntimeError, match='different application file'):
+        payload.receipt(*build[:3], 'verify-squirrel', packaged)
+
+
+@pytest.mark.parametrize('name', ['extra.dll', 'resources/unexpected.exe', 'build-evidence.json', 'version'])
+def test_rejects_extra_embedded_files(squirrel, name):
+    build, packaged = squirrel
+    write(packaged / name, b'extra')
+    with pytest.raises(RuntimeError, match='file set differs'):
+        payload.receipt(*build[:3], 'verify-squirrel', packaged)
+
+
+def test_chromium_notice_must_be_retained(build):
+    write(build[1] / 'LICENSES.chromium.html', b'chromium-notice')
+    run(build, 'seal')
+    packaged = build[0] / 'embedded'; shutil.copytree(build[1], packaged)
+    with pytest.raises(RuntimeError, match='Chromium license copy'):
+        payload.receipt(*build[:3], 'verify-squirrel', packaged)
+
+
+def test_installer_only_names_cannot_be_in_common_input(build):
+    write(build[1] / 'Squirrel.exe', b'updater')
+    run(build, 'seal')
+    packaged = build[0] / 'embedded'; shutil.copytree(build[1], packaged)
+    with pytest.raises(RuntimeError, match='installer-only file'):
+        payload.receipt(*build[:3], 'verify-squirrel', packaged)
+
+
+def check_zip(tmp_path, names, special=False):
+    import zipfile
+    import warnings
+    if shutil.which('node') is None:
+        pytest.skip('Node unavailable')
+    archive = tmp_path / 'full.nupkg'
+    with warnings.catch_warnings(), zipfile.ZipFile(archive, 'w') as output:
+        warnings.simplefilter('ignore', UserWarning)
+        for name in names:
+            output.writestr(name, b'' if name.endswith('/') else b'synthetic')
+        if special:
+            info = zipfile.ZipInfo('lib/net45/linked.dll')
+            info.create_system = 3
+            info.external_attr = (stat.S_IFLNK | 0o777) << 16
+            output.writestr(info, 'outside')
+    script = ("const fs=require('node:fs');require(process.argv[1]).verifyFullPackageEntries(fs.readFileSync(process.argv[2]))"
+              ".then(n=>console.log(n)).catch(e=>{console.error(e.message);process.exitCode=1;});")
+    return subprocess.run(['node', '-e', script, str(ROOT / 'scripts/verify-windows-release.cjs'), str(archive)],
+                          capture_output=True, text=True)
+
+
+def test_raw_zip_valid_paths_and_explicit_parent(tmp_path):
+    result = check_zip(tmp_path, ['_rels/.rels', 'lib/net45/Redactera.exe', 'lib/net45/', 'lib/net45/locales/简体.pak'])
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '4'
+
+
+@pytest.mark.parametrize('names', [
+    ['_rels/.rels', '_rels/.rels'],
+    ['_rels/.rels', 'lib/net45/file.dll', 'lib/net45/file.dll'],
+    ['_rels/.rels', 'lib/net45/file.dll', 'lib/net45/FILE.dll'],
+    ['_rels/.rels', 'lib/net45/file.dll', 'lib/NET45/other.dll'],
+    ['_rels/.rels', 'lib/net45/file', 'lib/net45/file/child.dll'],
+    ['_rels/.rels', 'lib/net45/../outside'],
+    ['_rels/.rels', 'lib/net45/bad\\name.dll'],
+    ['_rels/.rels', 'lib/net45/CON.dll'],
+    ['_rels/.rels', 'lib/net45/bad.'],
+    ['_rels/.rels', 'lib/net45/bad//name'],
+    ['_rels/.rels', '/absolute.dll'],
+    ['lib/net45/Redactera.exe'],
+])
+def test_raw_zip_rejects_conflicting_or_invalid_entries(tmp_path, names):
+    result = check_zip(tmp_path, names)
+    assert result.returncode == 1
+    assert 'Windows full package' in result.stderr
+
+
+def test_raw_zip_rejects_symlink(tmp_path):
+    result = check_zip(tmp_path, ['_rels/.rels'], special=True)
+    assert result.returncode == 1
+    assert 'non-regular entry' in result.stderr
