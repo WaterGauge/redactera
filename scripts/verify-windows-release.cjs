@@ -42,56 +42,100 @@ function verifyBuildProof(build) {
   return build;
 }
 
-function verifyFullPackageEntries(bytes) {
+// Check both views of the same archive before extraction. The raw pass rejects
+// alternative names and special types; the decoded pass uses the actual
+// extractor's yauzl semantics (including its CP437/UTF-8 decoding).
+function scanZip(bytes, decodeStrings, visit) {
   return new Promise((resolve, reject) => {
-    // extract-zip normalizes backslashes before its callback sees an entry.
-    yauzl.fromBuffer(bytes, { lazyEntries: true, decodeStrings: false }, (error, zip) => {
+    yauzl.fromBuffer(bytes, { lazyEntries: true, decodeStrings }, (error, zip) => {
       if (error) return reject(error);
-      const relationships = Buffer.from('_rels/.rels');
-      let relationshipEntries = 0;
-      const paths = new Map();
-      const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+      const entries = [];
       const fail = reason => { zip.close(); reject(reason); };
       zip.once('error', fail);
-      zip.once('end', () => {
-        zip.close();
-        if (relationshipEntries !== 1) return reject(Error('Windows full package must contain exactly one _rels/.rels entry.'));
-        resolve(zip.entryCount);
-      });
+      zip.once('end', () => { zip.close(); resolve(entries); });
       zip.on('entry', entry => {
-        if (entry.fileName.includes(0x5c)) return fail(Error('Windows full package contains a backslash in a ZIP entry name.'));
-        if (!(entry.generalPurposeBitFlag & 0x800) && entry.fileName.some(byte => byte > 0x7f)) {
-          return fail(Error('Windows full package has a non-ASCII ZIP entry without UTF-8 encoding.'));
-        }
-        try {
-          const name = utf8.decode(entry.fileName);
-          const directory = name.endsWith('/');
-          const parts = (directory ? name.slice(0, -1) : name).split('/');
-          if (parts.some(part => !part || part === '.' || part === '..' || /[<>:\"|?*\x00-\x1f]/.test(part) ||
-              /[ .]$/.test(part) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(part.split('.')[0].trimEnd()))) {
-            throw Error('Windows full package contains an invalid path.');
-          }
-          const kind = (entry.externalFileAttributes >>> 16) & 0xf000;
-          if ((entry.versionMadeBy >>> 8) === 3 && kind !== 0 && kind !== (directory ? 0x4000 : 0x8000) ||
-              directory && entry.uncompressedSize !== 0) throw Error('Windows full package contains a non-regular entry.');
-          for (let i = 0; i < parts.length; i++) {
-            const spelling = parts.slice(0, i + 1).join('/');
-            const key = spelling.toLowerCase();
-            const explicit = i === parts.length - 1;
-            const isDirectory = !explicit || directory;
-            const previous = paths.get(key);
-            if (previous && (previous.spelling !== spelling || previous.directory !== isDirectory || explicit && previous.explicit)) {
-              throw Error('Windows full package contains duplicate or conflicting paths.');
-            }
-            paths.set(key, { spelling, directory: isDirectory, explicit: explicit || Boolean(previous?.explicit) });
-          }
-          if (entry.fileName.equals(relationships)) relationshipEntries++;
-        } catch (error) { return fail(error); }
+        try { entries.push(visit(entry)); }
+        catch (error) { return fail(error); }
         zip.readEntry();
       });
       zip.readEntry();
     });
   });
+}
+
+function entryIdentity(entry, name = entry.fileName) {
+  return { name, attributes: entry.externalFileAttributes, creator: entry.versionMadeBy,
+    size: entry.uncompressedSize, crc32: entry.crc32, flags: entry.generalPurposeBitFlag,
+    compression: entry.compressionMethod, offset: entry.relativeOffsetOfLocalHeader };
+}
+
+async function verifyZipEntries(bytes, { fullPackage = false, expectedNames } = {}) {
+  const paths = new Map();
+  const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const raw = await scanZip(bytes, false, entry => {
+    if (entry.fileName.includes(0x5c)) throw Error('Windows full package contains a backslash in a ZIP entry name.');
+    if (!(entry.generalPurposeBitFlag & 0x800) && entry.fileName.some(byte => byte < 0x20 || byte >= 0x7f)) {
+      throw Error('Windows full package has a non-ASCII ZIP entry without UTF-8 encoding.');
+    }
+    if (entry.extraFields.some(field => field.id === 0x7075)) {
+      throw Error('Windows full package contains an alternative Unicode ZIP path.');
+    }
+    const name = utf8.decode(entry.fileName);
+    const directory = name.endsWith('/');
+    const parts = (directory ? name.slice(0, -1) : name).split('/');
+    if (name.startsWith('__MACOSX/') || parts.some(part => !part || part === '.' || part === '..' || /[<>:"|?*\x00-\x1f\x7f]/.test(part) ||
+        /[ .]$/.test(part) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(part.split('.')[0].trimEnd()))) {
+      throw Error('Windows full package contains an invalid or skipped path.');
+    }
+    // extract-zip interprets the high mode bits for every creator, not only
+    // Unix. A DOS directory attribute must also agree with the trailing slash.
+    const kind = (entry.externalFileAttributes >>> 16) & 0xf000;
+    const dosDirectory = Boolean(entry.externalFileAttributes & 0x10);
+    if ((kind !== 0 && kind !== (directory ? 0x4000 : 0x8000)) ||
+        (dosDirectory && !directory) || (directory && entry.uncompressedSize !== 0)) {
+      throw Error('Windows full package contains a non-regular entry or inconsistent directory.');
+    }
+    for (let i = 0; i < parts.length; i++) {
+      const spelling = parts.slice(0, i + 1).join('/');
+      const key = spelling.toLowerCase();
+      const explicit = i === parts.length - 1;
+      const isDirectory = !explicit || directory;
+      const previous = paths.get(key);
+      if (previous && (previous.spelling !== spelling || previous.directory !== isDirectory || explicit && previous.explicit)) {
+        throw Error('Windows full package contains duplicate or conflicting paths.');
+      }
+      paths.set(key, { spelling, directory: isDirectory, explicit: explicit || Boolean(previous?.explicit) });
+    }
+    return entryIdentity(entry, name);
+  });
+  const decoded = await scanZip(bytes, true, entry => entryIdentity(entry));
+  if (JSON.stringify(raw) !== JSON.stringify(decoded)) throw Error('Windows full package decoded entries differ from raw entries.');
+  const names = raw.map(entry => entry.name);
+  if (fullPackage && names.filter(name => name === '_rels/.rels').length !== 1) {
+    throw Error('Windows full package must contain exactly one _rels/.rels entry.');
+  }
+  if (expectedNames && JSON.stringify([...names].sort()) !== JSON.stringify([...expectedNames].sort())) {
+    throw Error('Setup must contain a single full package.');
+  }
+  return raw;
+}
+
+async function verifyFullPackageEntries(bytes) {
+  return (await verifyZipEntries(bytes, { fullPackage: true })).length;
+}
+
+async function extractCheckedZip(archive, output, bytes, options) {
+  // Both callers use a private, quiescent archive written/read in the current
+  // verification. Compare the actual extractor's entries to the preflight.
+  const expected = await verifyZipEntries(bytes, options);
+  let index = 0;
+  await extractZip(archive, { dir: output, onEntry: entry => {
+    if (JSON.stringify(entryIdentity(entry)) !== JSON.stringify(expected[index++])) {
+      throw Error('Windows full package extraction entries differ from verified entries.');
+    }
+  } });
+  if (index !== expected.length) throw Error('Windows full package extraction omitted verified entries.');
+  return index;
 }
 
 async function extractSetup(setup, work, member) {
@@ -102,10 +146,8 @@ async function extractSetup(setup, work, member) {
   const archive = path.join(work, 'setup.zip');
   fs.writeFileSync(archive, new Uint8Array(payload[0].bin), { flag: 'wx' });
   const output = path.join(work, 'setup');
-  const names = [];
-  await extractZip(archive, { dir: output, onEntry: entry => names.push(entry.fileName) });
-  const expected = ['RELEASES', 'Update.exe', 'background.gif', member, 'setupIcon.ico'].sort();
-  if (JSON.stringify(names.sort()) !== JSON.stringify(expected)) throw Error('Setup must contain a single full package.');
+  const expectedNames = ['RELEASES', 'Update.exe', 'background.gif', member, 'setupIcon.ico'];
+  await extractCheckedZip(archive, output, fs.readFileSync(archive), { expectedNames });
   return output;
 }
 
@@ -168,7 +210,6 @@ async function verify(output, setup, prepared, launcherTemplate) {
         release[1].toLowerCase() !== crypto.createHash('sha1').update(packageBytes).digest('hex')) {
       throw Error('Setup release manifest differs from its full package.');
     }
-    const rawZipEntries = await verifyFullPackageEntries(packageBytes);
     const fullPackageSha256 = hash(packageBytes);
     // The managed maker opens the completed full package with NuGet before publishing it.
     const checkedPackageSha256 = recorded
@@ -181,7 +222,7 @@ async function verify(output, setup, prepared, launcherTemplate) {
       }
     }
     const unpacked = path.join(work, 'unpacked');
-    await extractZip(archive, { dir: unpacked });
+    const rawZipEntries = await extractCheckedZip(archive, unpacked, packageBytes, { fullPackage: true });
     const spec = fs.readdirSync(unpacked).filter(name => name.endsWith('.nuspec'));
     if (spec.length !== 1) throw Error('Installer package metadata is missing');
     const xml = fs.readFileSync(path.join(unpacked, spec[0]), 'utf8');
@@ -212,7 +253,7 @@ async function verify(output, setup, prepared, launcherTemplate) {
       launcherIdentity: finalLauncher, windowsInstaller };
   } finally { fs.rmSync(work, { recursive: true, force: true }); }
 }
-module.exports = { verify, verifyIcon, installerEvidencePath, verifyFullPackageEntries };
+module.exports = { verify, verifyIcon, installerEvidencePath, verifyFullPackageEntries, extractCheckedZip };
 if (require.main === module) {
   const output = process.argv[2] || path.join(root, 'out/Redactera-win32-x64');
   const setup = process.argv[3] || path.join(root, 'out/make/squirrel.windows/x64', pkg.branding.name + '-' + pkg.version + ' Setup.exe');
