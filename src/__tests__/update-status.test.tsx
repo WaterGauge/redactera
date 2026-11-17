@@ -15,6 +15,7 @@ async function mount(response?: unknown, raw = false) {
   vi.stubGlobal('fetch', fetcher);
   const openExternal = vi.fn().mockResolvedValue(undefined);
   registerIpcHandlers({
+      updateAuthority: 'github-manual',
     ipcMain: { handle: (name: string, fn: Handler) => { handlers.set(name, fn); } },
     app: { getVersion: () => '2.0.0' }, shell: { openExternal },
     registerCoreHandlers: vi.fn(),

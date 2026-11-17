@@ -15,13 +15,22 @@ import { macApplicationMenu } from './main/applicationMenu';
 import { createWindowsRecoveryProbe } from './main/windowsRecovery';
 import { updateWindowsInstallIcon, updateWindowsShortcuts, windowsAppUserModelId } from './main/windowsShortcuts';
 import { BACKEND_CONTRACT } from './main/backendContract';
+import { captureDesktopProfile, desktopDistribution } from './main/distribution';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 const isTestEnvironment = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-const shouldBootstrapApp = !isTestEnvironment && !handleSquirrelStartup();
-if (!isTestEnvironment && !shouldBootstrapApp) app.quit();
+const distribution = isTestEnvironment ? null : desktopDistribution({ windowsStore: process.windowsStore, mas: process.mas });
+// Reject unsupported packaged contexts before legacy installation hooks, settings,
+// credentials, Chromium windows or document-session recovery can run.
+if (!isTestEnvironment && !distribution) {
+  dialog.showErrorBox('不支持的发行渠道', '此版本尚未支持当前应用包身份。请使用正式桌面安装版。');
+  app.exit(1);
+}
+const shouldBootstrapApp = distribution !== null && !handleSquirrelStartup();
+if (!isTestEnvironment && distribution && !shouldBootstrapApp) app.quit();
+const profile = shouldBootstrapApp ? captureDesktopProfile(app.getPath('userData'), app.getPath('sessionData')) : undefined;
 
 function handleSquirrelStartup(): boolean {
   if (process.platform !== 'win32') return false;
@@ -65,6 +74,7 @@ const pathValidator = createPathValidator();
 const settingsManager = createSettingsManager({
   app,
   safeStorage,
+  profileDirectory: profile?.userData,
 });
 
 let mainWindow: BrowserWindow | null = null;
@@ -115,7 +125,7 @@ function createWindow(): void {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 }
 
-if (shouldBootstrapApp) {
+if (shouldBootstrapApp && distribution && profile) {
   app.whenReady().then(() => {
     if (process.platform === 'darwin') {
       if (!app.isPackaged) app.dock?.setIcon(path.join(app.getAppPath(), 'assets', 'redactera-macos.png'));
@@ -126,7 +136,7 @@ if (shouldBootstrapApp) {
     app.setAboutPanelOptions({ applicationName: pkg.branding.nameZh });
     const settings = settingsManager.readPreferences();
     fileSession = createFileSession({
-      baseDirectory: path.join(app.getPath('userData'), 'file-sessions'),
+      baseDirectory: profile.fileSessions,
       preservePaths: settings.log_folder_path ? [settings.log_folder_path] : [],
       windowsProbe: process.platform === 'win32' ? createWindowsRecoveryProbe({
         command: app.isPackaged ? path.join(process.resourcesPath, 'dist', 'python_backend.exe')
@@ -171,6 +181,7 @@ if (shouldBootstrapApp) {
       mainWindowProvider: () => mainWindow,
       pathValidator,
       settingsManager,
+      updateAuthority: distribution.updateAuthority,
       pythonProcessManager,
       logger,
     });

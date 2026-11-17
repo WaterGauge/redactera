@@ -44,6 +44,7 @@ describe('IPC Integration', () => {
 
   it('registers version and update IPC handlers including legacy aliases', () => {
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });
@@ -61,6 +62,7 @@ describe('IPC Integration', () => {
 
   it('returns the current app version', async () => {
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });
@@ -72,6 +74,7 @@ describe('IPC Integration', () => {
 
   it('returns the local changelog entries from v1.0.0 through the current version', async () => {
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });
@@ -86,6 +89,7 @@ describe('IPC Integration', () => {
 
   it('passes the includePrerelease option through to the update service', async () => {
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });
@@ -106,6 +110,7 @@ describe('IPC Integration', () => {
 
   it('opens the release page externally', async () => {
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });
@@ -120,6 +125,7 @@ describe('IPC Integration', () => {
     mockDependencies.updateService.checkForUpdates.mockRejectedValueOnce(new Error('offline'));
 
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: mockIpcMain as any,
       ...mockDependencies,
     });

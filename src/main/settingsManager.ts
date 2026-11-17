@@ -9,6 +9,7 @@ import { validateSettings } from '../utils/validation';
 
 interface SettingsManagerDependencies {
   app: Pick<App, 'getPath'>;
+  profileDirectory?: string;
   safeStorage: Pick<SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'> &
     Partial<Pick<SafeStorage, 'getSelectedStorageBackend'>>;
   fsImpl?: Pick<typeof fs, 'readFileSync' | 'writeFileSync' | 'openSync' | 'fsyncSync' | 'closeSync' | 'renameSync' | 'unlinkSync'>;
@@ -80,12 +81,14 @@ interface ReadState {
 
 export function createSettingsManager({
   app,
+  profileDirectory,
   safeStorage,
   fsImpl = fs,
   httpsImpl = https,
   platform = process.platform,
 }: SettingsManagerDependencies): SettingsManager {
-  const getSettingsPath = (): string => path.join(app.getPath('userData'), 'settings.json');
+  if (profileDirectory !== undefined && !path.isAbsolute(profileDirectory)) throw Error('Invalid settings profile directory');
+  const getSettingsPath = (): string => path.join(profileDirectory ?? app.getPath('userData'), 'settings.json');
   const reads = new Map<string, { status?: CredentialStorageStatus; revision: string; credentialsLoaded: boolean }>();
 
   const rememberRead = (revision: string, status: CredentialStorageStatus | undefined, credentialsLoaded: boolean): string => {

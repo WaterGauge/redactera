@@ -310,6 +310,7 @@ describe('registerIpcHandlers default update service', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: ipcMain as any,
       app: { getVersion: vi.fn(() => '1.2.0'), getPath: vi.fn() } as any,
       shell: { openExternal: vi.fn().mockResolvedValue(undefined) } as any,
@@ -387,6 +388,7 @@ describe('registerIpcHandlers default update service', () => {
       ok: true, json: async () => tags.map(tag_name => ({ tag_name, draft: false, prerelease: false })),
     }));
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: { handle: (channel: string, handler: IpcHandler) => handlers.set(channel, handler) } as any,
       app: { getVersion: () => installed } as any,
       shell: { openExternal: vi.fn() } as any,
@@ -409,6 +411,7 @@ describe('registerIpcHandlers default update service', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     registerIpcHandlers({
+      updateAuthority: 'github-manual',
       ipcMain: ipcMain as any,
       app: { getVersion: vi.fn(() => '1.2.0'), getPath: vi.fn() } as any,
       shell: { openExternal: vi.fn().mockRejectedValue(new Error('browser blocked')) } as any,

@@ -6,6 +6,7 @@ import type { PathValidator, WriteTarget } from './pathValidator';
 import { type FileExportResult, captureWriteTarget, writeExportFile } from './fileExport';
 import type { FileSession } from './sessionFiles';
 import type { SettingsManager } from './settingsManager';
+import type { UpdateAuthority } from './distribution';
 import type { PythonProcessManager } from './pythonProcessManager';
 import { diagnosticErrorKind } from './diagnostics';
 import { createDroppedPdfImporter, PdfImportLimitError } from './fileImport';
@@ -75,6 +76,7 @@ interface UpdateIpcDependencies {
   ipcMain: Pick<IpcMain, 'handle'>;
   app: Pick<App, 'getVersion'>;
   shell: Pick<Shell, 'openExternal'>;
+  updateAuthority: UpdateAuthority;
   updateService?: UpdateService;
   registerCoreHandlers?: (dependencies: CoreIpcDependencies) => void;
 }
@@ -612,6 +614,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
     ipcMain,
     app,
     shell,
+    updateAuthority,
     updateService = createDefaultUpdateService({ shell }),
     registerCoreHandlers: registerCoreHandlersOverride,
   } = dependencies;
@@ -637,6 +640,10 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
     _event: unknown,
     options?: { includePrerelease?: boolean }
   ): Promise<UpdateCheckResult> => {
+    if (updateAuthority !== 'github-manual') {
+      return { updateAvailable: false, currentVersion, latestVersion: currentVersion,
+        error: createStructuredError('UPDATE_MANAGED_EXTERNALLY', 'Updates are not managed by this application channel') };
+    }
     const includePrerelease = Boolean(options?.includePrerelease);
 
     try {
@@ -665,6 +672,9 @@ export function registerIpcHandlers(dependencies: RegisterIpcHandlersDependencie
   ipcMain.handle('update:check', checkHandler);
 
   const openReleasePageHandler = async (): Promise<{ success: boolean; error?: UpdateCheckResult['error'] }> => {
+    if (updateAuthority !== 'github-manual') {
+      return { success: false, error: createStructuredError('UPDATE_MANAGED_EXTERNALLY', 'Updates are not managed by this application channel') };
+    }
     try {
       return await updateService.openReleasePage();
     } catch (error) {
