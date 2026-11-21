@@ -113,7 +113,8 @@ it('loads saved credentials only on an explicit edit and supports retry after un
   const h = harness(diskCredentials(), false); await h.mount();
   await h.click('编辑已保存的凭据');
   expect(credentialInput()).toBeDisabled();
-  h.state.available = true; h.call('get-developer-mode');
+  h.state.available = true;
+  expect(h.call('settings:get', false)).toMatchObject({ paddle_token: '' });
   expect(credentialInput()).toHaveValue('');
   await h.click('重试读取');
   expect(credentialInput()).toHaveValue(SECRET);

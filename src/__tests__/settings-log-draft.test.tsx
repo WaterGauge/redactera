@@ -23,18 +23,16 @@ async function mount() {
   } as unknown as Parameters<typeof registerCoreHandlers>[0]);
   const invoke = (name: string, ...args: unknown[]) => handlers.get(name)?.({}, ...args);
   const api = { getSettings: async (includeCredentials?: boolean) => invoke('settings:get', includeCredentials),
-    getDeveloperMode: async () => invoke('get-developer-mode'),
     getAppVersion: async () => '1.2.0', getChangelog: async () => ({ entries: [] }),
     selectLogFolder: vi.fn(async () => invoke('select-log-folder')),
     saveSettings: vi.fn(async (settings, includeCredentials?: boolean) => invoke('settings:save', settings, includeCredentials)),
-    setDeveloperMode: vi.fn(async enabled => invoke('set-developer-mode', enabled)),
   };
   Object.defineProperty(window, 'electronAPI', { configurable: true, writable: true, value: api });
   const onClose = vi.fn();
   await act(async () => { render(<SettingsModal onClose={onClose} />); });
   const choose = async () => { await act(async () => { fireEvent.click(screen.getByText('选择文件夹')); }); };
   const save = async () => { await act(async () => { fireEvent.click(screen.getByText('保存')); }); };
-  return { get persisted() { return persisted; }, writeSettings, logger, picker, api, onClose, choose, save };
+  return { get persisted() { return persisted; }, writeSettings, logger, picker, onClose, choose, save };
 }
 it('keeps folder selection in the draft and applies the selected path on save', async () => {
   const h = await mount(); await h.choose();
@@ -51,7 +49,9 @@ it('cancels folder changes without changing live settings or logger', async () =
 it('cancels a developer mode toggle without applying it', async () => {
   const h = await mount(); await act(async () => { fireEvent.click(screen.getByLabelText('开发者模式')); });
   fireEvent.click(screen.getByText('取消'));
-  expect(h.persisted.developer_mode).toBe(true); expect(h.api.setDeveloperMode).not.toHaveBeenCalled();
+  expect(h.persisted.developer_mode).toBe(true);
+  expect(h.writeSettings).not.toHaveBeenCalled();
+  expect(h.logger.initialize).not.toHaveBeenCalled();
 });
 it('keeps the old draft on picker cancellation', async () => {
   const h = await mount(); h.picker.mockResolvedValueOnce({ canceled: true, filePaths: [] });

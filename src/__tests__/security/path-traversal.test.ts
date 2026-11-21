@@ -19,9 +19,12 @@ describe('Security: Path Traversal Prevention', () => {
     const chosen = path.resolve('/tmp/export/result.pdf');
     validator.setWriteTarget({ filePath: chosen, realParent: path.dirname(chosen) });
 
-    expect(validator.isWritablePathAllowed(chosen)).toBe(true);
-    expect(validator.isWritablePathAllowed('/tmp/export/final.pdf')).toBe(false);
-    expect(validator.isWritablePathAllowed('/tmp/export/../steal/final.pdf')).toBe(false);
+    expect(validator.claimWriteTarget('/tmp/export/final.pdf')).toBeNull();
+    expect(validator.claimWriteTarget('/tmp/export/../steal/final.pdf')).toBeNull();
+    expect(validator.claimWriteTarget('/tmp/export/../export/result.pdf')).toEqual({
+      filePath: chosen, realParent: path.dirname(chosen),
+    });
+    expect(validator.claimWriteTarget(chosen)).toBeNull();
   });
 
   it('allows valid user document paths after resolution', () => {

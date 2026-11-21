@@ -52,7 +52,6 @@ function createHarness() {
       claimWriteTarget: vi.fn((file: string | null): WriteTarget | null => file ? ({filePath: file, realParent: path.dirname(file)}) : null),
       resolveUserPath: vi.fn((value: string) => value),
       isResolvedPathAllowed: vi.fn(() => true),
-      isWritablePathAllowed: vi.fn(() => true),
       getDraggedFilesDirectory: vi.fn((tempRoot: string) => `${tempRoot}/dragged`),
       sanitizeDraggedFileName: vi.fn((name: string) => name),
       isPathInsideDirectory: vi.fn(() => true),
@@ -70,7 +69,6 @@ function createHarness() {
     exportFileImpl,
     revealFile: vi.fn(),
     fsImpl: {
-      readFileSync: vi.fn(() => 'base64-content'),
       existsSync: vi.fn(() => true),
       promises: {
         realpath: vi.fn(async (file: string) => file),
@@ -134,7 +132,7 @@ describe('registerCoreHandlers', () => {
     await expect(handlers.get('dialog:saveFile')?.({}, {})).resolves.toBeNull();
   });
 
-  it('processes pdf actions and enforces read-file allowlist', async () => {
+  it('processes an authorized PDF and grants its result', async () => {
     const { handlers, dependencies } = createHarness();
     dependencies.pythonProcessManager.send.mockResolvedValueOnce({ output_path: '/tmp/report.pdf' });
 
@@ -142,16 +140,6 @@ describe('registerCoreHandlers', () => {
     expect(processResult).toEqual({ output_path: '/tmp/report.pdf' });
     expect(dependencies.pythonProcessManager.send).toHaveBeenCalledWith('desensitize', { file_path: '/tmp/allowed.pdf', keywords: ['TARGET'], settings: {} });
     expect(dependencies.pathValidator.addAllowedPath).toHaveBeenCalledWith('/tmp/report.pdf');
-
-    dependencies.pathValidator.resolveUserPath.mockReturnValueOnce('/tmp/allowed.pdf');
-    dependencies.pathValidator.isResolvedPathAllowed.mockReturnValueOnce(true);
-    expect(handlers.get('pdf:readFile')?.({}, '/tmp/allowed.pdf')).toBe('base64-content');
-
-    dependencies.pathValidator.resolveUserPath.mockReturnValueOnce('/tmp/blocked.pdf');
-    dependencies.pathValidator.isResolvedPathAllowed.mockReturnValueOnce(false);
-    expect(() => handlers.get('pdf:readFile')?.({}, '/tmp/blocked.pdf')).toThrow(
-      'Access denied: file not in allowed paths'
-    );
   });
 
   it('reads/saves settings and toggles developer mode', async () => {
@@ -175,17 +163,6 @@ describe('registerCoreHandlers', () => {
       handlers.get('settings:validateBaidu')?.({}, { apiKey: 'a', secretKey: 'b' })
     ).resolves.toEqual({ valid: false });
 
-    expect(handlers.get('get-developer-mode')?.({})).toEqual({
-      enabled: false,
-      logFolderPath: '',
-    });
-
-    expect(handlers.get('set-developer-mode')?.({}, true)).toEqual({
-      success: true,
-    });
-    expect(dependencies.settingsManager.writePreferences).toHaveBeenCalledWith(
-      expect.objectContaining({ developer_mode: true })
-    );
     expect(dependencies.logger.initialize).toHaveBeenCalledWith('', true);
   });
 

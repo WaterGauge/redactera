@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { diagnosticErrorKind } from './diagnostics';
 
-const OWNED = new Set(['dialog:openFile', 'dialog:saveFile', 'pdf:process', 'pdf:cancel', 'pdf:readFile', 'pdf:readPreview', 'file:copy', 'file:saveDragged']);
+const OWNED = new Set(['dialog:openFile', 'dialog:saveFile', 'pdf:process', 'pdf:cancel', 'pdf:readPreview', 'file:copy', 'file:saveDragged']);
 const WRITES = new Set(['file:copy', 'file:saveDragged']);
 
 export function createFileLifecycle() {

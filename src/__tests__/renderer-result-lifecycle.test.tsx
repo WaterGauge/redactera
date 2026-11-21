@@ -140,16 +140,14 @@ function makeAPI() {
     onPythonCrashed: vi.fn<Window['electronAPI']['onPythonCrashed']>(),
     onProcessingProgress: vi.fn<Window['electronAPI']['onProcessingProgress']>().mockReturnValue(vi.fn()),
     cancelAction: vi.fn<Window['electronAPI']['cancelAction']>().mockResolvedValue({ confirmed: true }),
-    getDeveloperMode: vi.fn().mockResolvedValue({ enabled: false, logFolderPath: '' }),
     getAppVersion: vi.fn().mockResolvedValue('1.2.1-beta.3'),
     getChangelog: vi.fn().mockResolvedValue({ currentVersion: '1.2.1-beta.3', entries: [] }),
-    setDeveloperMode: vi.fn().mockResolvedValue({ success: true }),
     selectLogFolder: vi.fn().mockResolvedValue({ success: false }),
     validateBaidu: vi.fn().mockResolvedValue({ valid: true }),
     checkForUpdates: vi.fn().mockResolvedValue({ updateAvailable: false }),
     openReleasePage: vi.fn().mockResolvedValue({ success: true }),
     openReleasesPage: vi.fn().mockResolvedValue({ success: true }),
-    readFileAsBase64: vi.fn(), readPdfPreview: vi.fn(),
+    readPdfPreview: vi.fn(),
   };
   return api;
 }

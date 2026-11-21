@@ -89,7 +89,7 @@ it('refuses final exports inside session storage or an owned external staging di
   for (const target of [path.join(h.session.directory, 'final.pdf'), path.join(staging, 'final.pdf')]) {
     h.showSaveDialog.mockResolvedValueOnce({ canceled: false, filePath: target });
     await expect(h.call('dialog:saveFile', {})).rejects.toThrow('outside application temporary storage');
-    expect(h.validators.isWritablePathAllowed(target)).toBe(false);
+    expect(h.validators.claimWriteTarget(target)).toBeNull();
   }
 });
 it('waits for a physical export before stopping Python and removing the private input', async () => {

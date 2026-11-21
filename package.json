@@ -9,7 +9,7 @@
     "macBundleId": "com.electron.pdf-desensitization",
     "squirrelName": "pdf_desensitization_new"
   },
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "PDF 文档脱敏工具",
   "main": ".webpack/main/index.cjs",
   "private": true,

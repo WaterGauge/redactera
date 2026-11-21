@@ -19,7 +19,6 @@ const mockElectronAPI = {
     baidu_api_key: '',
     baidu_secret_key: '',
   }),
-  getDeveloperMode: vi.fn().mockResolvedValue({ logFolderPath: '' }),
   getAppVersion: vi.fn().mockResolvedValue('1.2.1-beta.3'),
   getChangelog: vi.fn().mockResolvedValue({
     currentVersion: '1.2.1-beta.3',
@@ -35,7 +34,6 @@ const mockElectronAPI = {
   }),
   openReleasePage: vi.fn().mockResolvedValue({ success: true }),
   saveSettings: vi.fn().mockResolvedValue({ success: true }),
-  setDeveloperMode: vi.fn().mockResolvedValue(true),
   selectLogFolder: vi.fn().mockResolvedValue({ success: false }),
   validateBaidu: vi.fn().mockResolvedValue({ valid: true }),
 };

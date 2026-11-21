@@ -17,7 +17,6 @@ export interface PathValidator {
   claimWriteTarget(filePath: string | null): WriteTarget | null;
   isResolvedPathAllowed(resolvedPath: string | null): boolean;
   isPathInsideDirectory(filePath: string, directory: string): boolean;
-  isWritablePathAllowed(filePath: string | null): boolean;
   resolvePdfSafePathFromRequest(requestUrl: string): string | null;
   sanitizeDraggedFileName(fileName: string): string;
   getDraggedFilesDirectory(tempRoot: string): string;
@@ -130,14 +129,6 @@ export function createPathValidator(options?: {
       return !!resolvedPath && allowedPaths.has(resolvedPath);
     },
     isPathInsideDirectory,
-    isWritablePathAllowed(filePath: string | null): boolean {
-      const resolvedPath = resolveUserPath(filePath ?? '');
-      if (!resolvedPath) {
-        return false;
-      }
-
-      return writeTarget?.filePath === resolvedPath;
-    },
     resolvePdfSafePathFromRequest,
     sanitizeDraggedFileName(fileName: string): string {
       return sanitizeDraggedFileName(fileName, draggedFileMaxNameLength);

@@ -21,7 +21,6 @@ async function mount(response?: unknown, raw = false) {
   } as unknown as Parameters<typeof registerIpcHandlers>[0]);
   const api = {
     getSettings: vi.fn().mockResolvedValue(DEFAULT_SETTINGS),
-    getDeveloperMode: vi.fn().mockResolvedValue({ enabled: false, logFolderPath: '' }),
     getAppVersion: vi.fn().mockResolvedValue('2.0.0'),
     getChangelog: vi.fn().mockResolvedValue({ currentVersion: '2.0.0', entries: [] }),
     checkForUpdates: vi.fn(async options => raw ? response : handlers.get('app:checkForUpdates')?.({}, options)),

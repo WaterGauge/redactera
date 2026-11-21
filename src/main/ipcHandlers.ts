@@ -557,15 +557,6 @@ export function registerCoreHandlers({
     }
   });
 
-  ipcMain.handle('pdf:readFile', (_event, filePath: string) => {
-    const resolvedPath = pathValidator.resolveUserPath(filePath);
-    if (!resolvedPath || !pathValidator.isResolvedPathAllowed(resolvedPath)) {
-      throw new Error('Access denied: file not in allowed paths');
-    }
-
-    return fsImpl.readFileSync(resolvedPath, 'base64');
-  });
-
   ipcMain.handle('settings:get', (_event, includeCredentials?: boolean) =>
     includeCredentials === false ? settingsManager.readPreferences() : settingsManager.readSettings());
 
@@ -583,23 +574,6 @@ export function registerCoreHandlers({
       valid: await settingsManager.validateBaiduKeys(apiKey, secretKey),
     })
   );
-
-  ipcMain.handle('get-developer-mode', () => {
-    const settings = settingsManager.readPreferences();
-    return {
-      enabled: settings.developer_mode,
-      logFolderPath: settings.log_folder_path,
-    };
-  });
-
-  ipcMain.handle('set-developer-mode', (_event, enabled: boolean) => {
-    const settings = settingsManager.readPreferences();
-    if (enabled) requirePersistentLogFolder(settings.log_folder_path);
-    settings.developer_mode = enabled;
-    settingsManager.writePreferences(settings);
-    logger.initialize(settings.log_folder_path, enabled);
-    return { success: true };
-  });
 
   ipcMain.handle('select-log-folder', async () => {
     const result = await dialog.showOpenDialog({

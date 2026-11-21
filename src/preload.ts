@@ -11,7 +11,6 @@ declare global {
       processAction(action: string, payload: Record<string, unknown>, operationId?: string): Promise<unknown>;
       cancelAction(operationId: string): Promise<{ confirmed: boolean }>;
       onProcessingProgress(callback: (data: OperationProgress) => void): () => void;
-      readFileAsBase64(filePath: string): Promise<string>;
       readPdfPreview(filePath: string): Promise<Uint8Array>;
       importDroppedFile(file: File): Promise<string | null>;
       getSettings(includeCredentials?: boolean): Promise<AppSettings>;
@@ -25,8 +24,6 @@ declare global {
       onPythonCrashed(callback: (data: { code: number | null }) => void): () => void;
       copyFile(sourcePath: string, destPath: string): Promise<{ success: boolean }>;
       revealLastExport(): Promise<{ success: boolean }>;
-      getDeveloperMode(): Promise<{ enabled: boolean; logFolderPath: string }>;
-      setDeveloperMode(enabled: boolean): Promise<{ success: boolean }>;
       selectLogFolder(): Promise<{ success: boolean; path?: string }>;
     };
   }
@@ -55,10 +52,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event: Electron.IpcRendererEvent, data: OperationProgress) => callback(data);
     ipcRenderer.on('pdf:progress', listener);
     return () => { ipcRenderer.removeListener('pdf:progress', listener); };
-  },
-
-  readFileAsBase64(filePath: string): Promise<string> {
-    return ipcRenderer.invoke('pdf:readFile', filePath);
   },
 
   readPdfPreview(filePath: string): Promise<Uint8Array> {
@@ -148,14 +141,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   revealLastExport(): Promise<{ success: boolean }> {
     return ipcRenderer.invoke('file:revealExport');
-  },
-
-  getDeveloperMode(): Promise<{ enabled: boolean; logFolderPath: string }> {
-    return ipcRenderer.invoke('get-developer-mode');
-  },
-
-  setDeveloperMode(enabled: boolean): Promise<{ success: boolean }> {
-    return ipcRenderer.invoke('set-developer-mode', enabled);
   },
 
   selectLogFolder(): Promise<{ success: boolean; path?: string }> {

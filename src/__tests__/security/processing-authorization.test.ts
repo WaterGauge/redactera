@@ -115,7 +115,6 @@ describe('processing authorization through real Main handlers and filesystem', (
     await expect(h.call('pdf:process', h.request(action, { file_path: h.secret }))).rejects.toThrow();
     expect(h.send).not.toHaveBeenCalled();
     expect(h.validator.isResolvedPathAllowed(h.secret)).toBe(false);
-    await expect(h.call('pdf:readFile', h.secret)).rejects.toThrow('Access denied');
   });
 
   it.each([null, [], {}, { action: 'scan', payload: {} }, { action: 1, payload: {} },
@@ -160,7 +159,7 @@ describe('processing authorization through real Main handlers and filesystem', (
     h.validator.addAllowedPath(spaced);
     await h.call('pdf:process', h.request('upload', { file_path: spaced }));
     expect(h.send).toHaveBeenCalledWith('upload', { file_path: spaced });
-    expect(await h.call('pdf:readFile', spaced)).toBe(fs.readFileSync(spaced, 'base64'));
+    expect(h.validator.isResolvedPathAllowed(spaced)).toBe(true);
   });
 
   it('does not grant arbitrary nested response paths from upload', async () => {
@@ -177,7 +176,6 @@ describe('processing authorization through real Main handlers and filesystem', (
     const result = await h.call('pdf:process', h.request()) as { review: unknown };
     expect(result.review).toEqual(review);
     expect(h.validator.isResolvedPathAllowed(h.secret)).toBe(false);
-    await expect(h.call('pdf:readFile', h.secret)).rejects.toThrow('Access denied');
   });
 
   it('requires PDF export to return its already-authorized source', async () => {
@@ -257,7 +255,7 @@ describe('processing authorization through real Main handlers and filesystem', (
     await h.call('pdf:process', h.request(exporting ? 'export' : mode, exporting ? { format: mode } : {}));
     expect(h.send).toHaveBeenCalledTimes(1);
     const file = mode === 'desensitize' ? h.output : mode === 'png' ? h.png : mode === 'png_zip' ? h.zip : h.source;
-    expect(await h.call('pdf:readFile', file)).toBe(fs.readFileSync(file, 'base64'));
+    expect(h.validator.isResolvedPathAllowed(file)).toBe(true);
     expect(h.validator.isResolvedPathAllowed(h.secret)).toBe(false);
   });
 
